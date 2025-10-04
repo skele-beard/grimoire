@@ -16,6 +16,7 @@ use std::error::Error;
 use std::io;
 use ui::ui;
 
+#[allow(clippy::single_match)]
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<bool> {
     loop {
         terminal.draw(|f| ui(f, app))?;
@@ -27,9 +28,113 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
             match app.current_screen {
                 CurrentScreen::Main => match key.code {
                     KeyCode::Char('q') => return Ok(true),
+                    KeyCode::Esc => app.currently_selected_secret_idx = None,
+                    KeyCode::Char('n') => {
+                        app.current_screen = CurrentScreen::New;
+                        app.currently_editing = Some(CurrentlyEditing::Name);
+                    }
+                    KeyCode::Enter => {
+                        app.current_screen = CurrentScreen::Editing;
+                        app.currently_editing = Some(CurrentlyEditing::Name);
+                        app.populate_input_fields_from_secret();
+                    }
+                    KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down => {
+                        app.select_new_secret(key.code);
+                    }
                     _ => {}
                 },
-                _ => {}
+                CurrentScreen::New => match key.code {
+                    KeyCode::Esc => {
+                        app.current_screen = CurrentScreen::Main;
+                        app.clear_input_fields();
+                    }
+                    KeyCode::Tab => {
+                        app.increment_currently_editing();
+                    }
+                    KeyCode::Enter => {
+                        app.add_secret(
+                            // This could  be improved by not passing
+                            // args since they are included in app's state. For now, I'm going to leave
+                            // it this way.
+                            &app.name_input.clone(),
+                            &app.username_input.clone(),
+                            &app.password_input.clone(),
+                        );
+                        app.current_screen = CurrentScreen::Main;
+                        app.clear_input_fields();
+                    }
+                    KeyCode::BackTab => {
+                        app.decrement_currently_editing();
+                    }
+                    KeyCode::Backspace | KeyCode::Char('\x08') | KeyCode::Char('\x7f') => {
+                        if let Some(editing) = &mut app.currently_editing {
+                            match editing {
+                                CurrentlyEditing::Name => {
+                                    app.name_input.pop();
+                                }
+                                CurrentlyEditing::Username => {
+                                    app.username_input.pop();
+                                }
+                                CurrentlyEditing::Password => {
+                                    app.password_input.pop();
+                                }
+                            }
+                        }
+                    }
+                    KeyCode::Char(value) => {
+                        if let Some(editing) = &app.currently_editing {
+                            match editing {
+                                CurrentlyEditing::Name => app.name_input.push(value),
+                                CurrentlyEditing::Username => app.username_input.push(value),
+                                CurrentlyEditing::Password => app.password_input.push(value),
+                            }
+                        }
+                    }
+                    _ => {}
+                },
+                CurrentScreen::Editing => match key.code {
+                    KeyCode::Esc => {
+                        app.current_screen = CurrentScreen::Main;
+                        app.clear_input_fields();
+                    }
+                    KeyCode::Tab => {
+                        app.increment_currently_editing();
+                    }
+                    KeyCode::Enter => {
+                        // You need to save the new value
+                        app.update_secret();
+                        app.clear_input_fields();
+                        app.current_screen = CurrentScreen::Main;
+                    }
+                    KeyCode::BackTab => {
+                        app.decrement_currently_editing();
+                    }
+                    KeyCode::Backspace | KeyCode::Char('\x08') | KeyCode::Char('\x7f') => {
+                        if let Some(editing) = &mut app.currently_editing {
+                            match editing {
+                                CurrentlyEditing::Name => {
+                                    app.name_input.pop();
+                                }
+                                CurrentlyEditing::Username => {
+                                    app.username_input.pop();
+                                }
+                                CurrentlyEditing::Password => {
+                                    app.password_input.pop();
+                                }
+                            }
+                        }
+                    }
+                    KeyCode::Char(value) => {
+                        if let Some(editing) = &app.currently_editing {
+                            match editing {
+                                CurrentlyEditing::Name => app.name_input.push(value),
+                                CurrentlyEditing::Username => app.username_input.push(value),
+                                CurrentlyEditing::Password => app.password_input.push(value),
+                            }
+                        }
+                    }
+                    _ => {}
+                },
             }
         }
     }
@@ -38,7 +143,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
 fn main() -> Result<(), Box<dyn Error>> {
     // setup terminal
     enable_raw_mode()?;
-    let mut stdout = io::stdout(); // This is a special case. Normally using stdout is fine
+    let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;

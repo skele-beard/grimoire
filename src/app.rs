@@ -4,11 +4,11 @@ use argon2::{
     Argon2,
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
 };
+use crossterm::event::KeyCode;
 use rand::distr::{Distribution, Uniform};
 use rand::prelude::*;
 use rand_argon_compatible::rngs::OsRng as OsRng08;
 use secret::{EncryptedSecret, Secret};
-use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -16,6 +16,8 @@ pub enum CurrentScreen {
     Main,
     Editing,
     New,
+    Login,
+    Init,
 }
 
 pub enum CurrentlyEditing {
@@ -25,27 +27,41 @@ pub enum CurrentlyEditing {
 }
 
 pub struct App {
-    pub secrets: HashMap<String, Secret>,
+    pub secrets: Vec<Secret>,
     pub current_screen: CurrentScreen,
     pub currently_editing: Option<CurrentlyEditing>,
+    pub currently_selected_secret_idx: Option<usize>,
     pub master_password_file: PathBuf,
     pub password_store: PathBuf,
+    pub secrets_per_row: usize,
+    pub name_input: String,
+    pub username_input: String,
+    pub password_input: String,
     key: [u8; 32],
 }
 
+#[allow(clippy::single_match)]
 impl App {
     pub fn new(password_attempt: &str) -> App {
         let mut app = App {
-            secrets: HashMap::new(),
-            current_screen: CurrentScreen::Main,
+            secrets: Vec::new(),
+            current_screen: CurrentScreen::Login,
+            currently_selected_secret_idx: None,
             currently_editing: None,
-            master_password_file: PathBuf::from("/home/chandler/grimoire/password_store/master.txt"),
+            master_password_file: PathBuf::from(
+                "/home/chandler/grimoire/password_store/master.txt",
+            ),
             password_store: PathBuf::from("/home/chandler/grimoire/password_store/"),
+            secrets_per_row: 3,
+            name_input: String::from(""),
+            username_input: String::from(""),
+            password_input: String::from(""),
             key: [0u8; 32],
-
         };
         // init the master_password and secret store
         app.init();
+
+        // call authenticate in main.rs under the Login branch of the match statement
         let attempt = app.authenticate(password_attempt);
         if attempt.expect("Error") {
             let salt = app.get_salt();
@@ -55,7 +71,6 @@ impl App {
                 .unwrap();
             app.key = key;
             let _ = app.populate_secrets(key);
-            //let _ = app.add_secret("my_secret4", "username2", "password2");
             app
         } else {
             std::process::exit(1)
@@ -125,14 +140,15 @@ impl App {
         match contents {
             Ok(text) => {
                 if text.is_empty() {
-                    self.set_master_password();
+                    self.current_screen = CurrentScreen::Init;
                 }
             }
             _ => {
-                self.set_master_password();
+                self.current_screen = CurrentScreen::Init;
             }
         }
     }
+
     fn populate_secrets(&mut self, key: [u8; 32]) -> std::io::Result<()> {
         for entry in fs::read_dir(self.password_store.clone())? {
             let entry = entry?;
@@ -141,13 +157,119 @@ impl App {
                 continue;
             }
             let secret: Secret = EncryptedSecret::decrypt(key, path);
-            self.secrets.insert(String::from(secret.get_name()), secret);
+            self.secrets.push(secret);
         }
         Ok(())
     }
-    fn add_secret(&mut self, name: &str, username: &str, password: &str) {
+
+    pub fn add_secret(&mut self, name: &str, username: &str, password: &str) {
         let secret = Secret::new(name, username, password);
         secret.save(self.key, self.password_store.clone());
-        self.secrets.insert(String::from(name), secret);
+        self.secrets.push(secret);
+    }
+
+    // The only reason this method needs to exist is if the name is changed - we don't want the old
+    // secret lingering around
+    pub fn update_secret(&mut self) {
+        //Delete secret
+        match self.currently_selected_secret_idx {
+            Some(current_idx) => {
+                if current_idx < self.secrets.len() {
+                    let secret = self.secrets.remove(current_idx);
+                    let filepath = self.password_store.clone();
+                    secret.delete(filepath);
+                }
+            }
+            _ => {}
+        }
+        //
+        //Resave with new values
+        self.add_secret(
+            &self.name_input.clone(),
+            &self.username_input.clone(),
+            &self.password_input.clone(),
+        )
+    }
+
+    pub fn increment_currently_editing(&mut self) {
+        match self.currently_editing {
+            None => self.currently_editing = Some(CurrentlyEditing::Name),
+            Some(CurrentlyEditing::Name) => {
+                self.currently_editing = Some(CurrentlyEditing::Username)
+            }
+            Some(CurrentlyEditing::Username) => {
+                self.currently_editing = Some(CurrentlyEditing::Password)
+            }
+            Some(CurrentlyEditing::Password) => {
+                self.currently_editing = Some(CurrentlyEditing::Name)
+            }
+        }
+    }
+
+    pub fn decrement_currently_editing(&mut self) {
+        match self.currently_editing {
+            None => self.currently_editing = Some(CurrentlyEditing::Password),
+            Some(CurrentlyEditing::Name) => {
+                self.currently_editing = Some(CurrentlyEditing::Password)
+            }
+            Some(CurrentlyEditing::Username) => {
+                self.currently_editing = Some(CurrentlyEditing::Name)
+            }
+            Some(CurrentlyEditing::Password) => {
+                self.currently_editing = Some(CurrentlyEditing::Username)
+            }
+        }
+    }
+
+    pub fn clear_input_fields(&mut self) {
+        self.currently_selected_secret_idx = None;
+        self.currently_editing = None;
+        self.name_input = String::from("");
+        self.username_input = String::from("");
+        self.password_input = String::from("");
+    }
+
+    pub fn populate_input_fields_from_secret(&mut self) {
+        match self.currently_selected_secret_idx {
+            Some(current_idx) => {
+                if let Some(secret) = self.secrets.get(current_idx) {
+                    self.name_input = String::from(secret.get_name());
+                    self.username_input = String::from(secret.get_username());
+                    self.password_input = String::from(secret.get_password());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub fn select_new_secret(&mut self, input: KeyCode) {
+        let len = self.secrets.len();
+        if len == 0 {
+            return;
+        }
+
+        self.currently_selected_secret_idx = Some(match self.currently_selected_secret_idx {
+            None => 0,
+            Some(current_idx) => match input {
+                KeyCode::Left => {
+                    if current_idx == 0 {
+                        len - 1
+                    } else {
+                        current_idx - 1
+                    }
+                }
+                KeyCode::Right => (current_idx + 1) % len,
+                KeyCode::Down => (current_idx + self.secrets_per_row) % len,
+                KeyCode::Up => {
+                    if current_idx < self.secrets_per_row {
+                        // wrap to bottom row
+                        (len + current_idx).saturating_sub(self.secrets_per_row) % len
+                    } else {
+                        current_idx - self.secrets_per_row
+                    }
+                }
+                _ => current_idx,
+            },
+        });
     }
 }
