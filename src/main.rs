@@ -58,7 +58,13 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                 },
                 CurrentScreen::Main => match key.code {
                     KeyCode::Char('q') => return Ok(true),
-                    KeyCode::Esc => app.currently_selected_secret_idx = None,
+                    KeyCode::Esc => {
+                        if let Some(_) = app.currently_selected_secret_idx {
+                            app.currently_selected_secret_idx = None;
+                        } else {
+                            return Ok(true);
+                        }
+                    }
                     KeyCode::Char('n') => {
                         app.current_screen = CurrentScreen::New;
                         app.currently_editing = Some(CurrentlyEditing::Name);

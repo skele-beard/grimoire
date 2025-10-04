@@ -5,7 +5,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
     text::Text,
-    widgets::{Block, BorderType, Borders, Clear, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
 };
 
 const LOCK_ART: &str = include_str!("../../assets/lock.txt");
@@ -18,19 +18,16 @@ pub fn render_login(frame: &mut Frame, app: &App) {
     // Split vertically: top = block, bottom = lock art
     let layout_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+        .constraints([
+            Constraint::Percentage(20),
+            Constraint::Percentage(40),
+            Constraint::Percentage(40),
+        ])
         .split(full_area);
 
     let title_area = layout_chunks[0];
-    let block_area = layout_chunks[1];
-
-    // === Login block ===
-    /*let block = Block::default()
-        .title("Grimoire Login")
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Gray))
-        .style(Style::default().bg(Color::Black));
-    frame.render_widget(block, block_area);*/
+    let lock_area = layout_chunks[1];
+    let block_area = layout_chunks[2];
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -62,9 +59,24 @@ pub fn render_login(frame: &mut Frame, app: &App) {
         .alignment(ratatui::layout::Alignment::Center);
     frame.render_widget(hint, chunks[2]);
 
-    // === ASCII lock art BELOW ===
     let title_text = Paragraph::new(Text::from(TITLE_ART))
         .style(Style::default().fg(Color::Cyan))
         .alignment(ratatui::layout::Alignment::Center);
     frame.render_widget(title_text, title_area);
+
+    let horizontal_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(35), // left spacer
+            Constraint::Percentage(30), // center column (ASCII art)
+            Constraint::Percentage(35), // right spacer
+        ])
+        .split(lock_area);
+
+    let art_paragraph = Paragraph::new(LOCK_ART)
+        .style(Style::default().fg(Color::Cyan))
+        .wrap(Wrap { trim: false })
+        .alignment(ratatui::layout::Alignment::Left);
+
+    frame.render_widget(art_paragraph, horizontal_chunks[1]);
 }
