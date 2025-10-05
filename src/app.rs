@@ -141,14 +141,12 @@ impl App {
     }
 
     pub fn set_master_password(&self) {
-        //GET INPUT
-        let master_password = "1234";
         if let Some(parent) = &self.master_password_file.parent() {
             fs::create_dir_all(parent).expect("Couldn't create parent directories");
         }
         let salt = SaltString::generate(&mut OsRng08);
         let hash = Argon2::default()
-            .hash_password(master_password.as_bytes(), &salt)
+            .hash_password(self.scratch.as_bytes(), &salt)
             .unwrap();
 
         let mut text = String::new();

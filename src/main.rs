@@ -30,12 +30,14 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     KeyCode::Enter => {
                         app.set_master_password();
                         app.clear_input_fields();
+                        app.current_screen = CurrentScreen::Main;
                     }
+                    KeyCode::Esc => return Ok(true),
                     KeyCode::Backspace | KeyCode::Char('\x08') | KeyCode::Char('\x7f') => {
-                        app.password_input.pop();
+                        app.scratch.pop();
                     }
                     KeyCode::Char(value) => {
-                        app.password_input.push(value);
+                        app.scratch.push(value);
                     }
                     _ => {}
                 },
