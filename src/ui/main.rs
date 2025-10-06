@@ -69,7 +69,7 @@ pub fn render_secret_grid(frame: &mut Frame, app: &App, area: Rect) {
 pub fn render_secret_card(frame: &mut Frame, app: &App, secret: &Secret, idx: usize, area: Rect) {
     let selected = Some(idx) == app.currently_selected_secret_idx;
     let style = if selected {
-        Style::default().fg(Color::Black).bg(Color::LightYellow)
+        Style::default().fg(Color::Black).bg(Color::Cyan)
     } else {
         Style::default().fg(Color::White)
     };

@@ -47,14 +47,14 @@ impl Secret {
         });
 
         filepath.push(&self.name.as_str());
-        filepath.set_extension(".json");
+        filepath.set_extension("json");
 
         fs::write(filepath, json.to_string())
     }
 
     pub fn delete(&self, mut filepath: PathBuf) -> Result<(), std::io::Error> {
         filepath.push(&self.name.as_str());
-        filepath.set_extension(".json");
+        filepath.set_extension("json");
         fs::remove_file(filepath)
     }
 

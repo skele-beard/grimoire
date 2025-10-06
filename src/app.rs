@@ -140,13 +140,15 @@ impl App {
         password
     }
 
-    pub fn set_master_password(&self) {
+    pub fn set_master_password(&mut self) {
+        let password = self.scratch.clone();
         if let Some(parent) = &self.master_password_file.parent() {
             fs::create_dir_all(parent).expect("Couldn't create parent directories");
         }
         let salt = SaltString::generate(&mut OsRng08);
         let hash = Argon2::default()
-            .hash_password(self.scratch.as_bytes(), &salt)
+            //.hash_password(self.scratch.as_bytes(), &salt)
+            .hash_password(password.as_bytes(), &salt)
             .unwrap();
 
         let mut text = String::new();
@@ -156,6 +158,15 @@ impl App {
             Ok(_) => (),
             Err(e) => panic!("{}", e),
         }
+
+        let mut key = [0u8; 32];
+        let salt = self.get_salt();
+        Argon2::default()
+            .hash_password_into(password.as_bytes(), &salt, &mut key)
+            .unwrap();
+
+        // store and populate
+        self.key = key;
     }
 
     fn init(&mut self) {

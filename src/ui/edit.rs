@@ -4,7 +4,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Wrap},
 };
 
 pub fn render_edit_popup(frame: &mut Frame, app: &App) {
@@ -24,7 +24,7 @@ pub fn render_edit_popup(frame: &mut Frame, app: &App) {
         ])
         .split(area);
 
-    let active_style = Style::default().bg(Color::LightYellow).fg(Color::Black);
+    let active_style = Style::default().bg(Color::Cyan).fg(Color::Black);
     let mut name = Block::default().title("Name").borders(Borders::ALL);
     let mut user = Block::default().title("Username").borders(Borders::ALL);
     let mut pass = Block::default().title("Password").borders(Borders::ALL);
@@ -37,15 +37,21 @@ pub fn render_edit_popup(frame: &mut Frame, app: &App) {
     }
 
     frame.render_widget(
-        Paragraph::new(app.name_input.clone()).block(name),
+        Paragraph::new(app.name_input.clone())
+            .wrap(Wrap { trim: true })
+            .block(name),
         chunks[0],
     );
     frame.render_widget(
-        Paragraph::new(app.username_input.clone()).block(user),
+        Paragraph::new(app.username_input.clone())
+            .wrap(Wrap { trim: true })
+            .block(user),
         chunks[1],
     );
     frame.render_widget(
-        Paragraph::new(app.password_input.clone()).block(pass),
+        Paragraph::new(app.password_input.clone())
+            .wrap(Wrap { trim: true })
+            .block(pass),
         chunks[2],
     );
 }
