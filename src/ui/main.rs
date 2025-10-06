@@ -4,7 +4,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Line, Span},
+    text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 
@@ -74,13 +74,18 @@ pub fn render_secret_card(frame: &mut Frame, app: &App, secret: &Secret, idx: us
         Style::default().fg(Color::White)
     };
 
-    let lines = format!(
-        "Username : {}\nPassword : {}",
-        secret.get_username(),
-        secret.get_password()
-    );
+    let mut text = Text::default();
+    for pair in secret.get_contents() {
+        text.push_line(Line::from(vec![
+            Span::styled(
+                format!("{} : ", pair.key),
+                Style::default().fg(Color::Yellow),
+            ),
+            Span::raw(pair.value),
+        ]));
+    }
 
-    let paragraph = Paragraph::new(lines)
+    let paragraph = Paragraph::new(text)
         .block(
             Block::default()
                 .title(secret.get_name())

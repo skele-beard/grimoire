@@ -8,7 +8,7 @@ use crossterm::event::KeyCode;
 use rand::distr::{Distribution, Uniform};
 use rand::prelude::*;
 use rand_argon_compatible::rngs::OsRng as OsRng08;
-use secret::{EncryptedSecret, Secret};
+use secret::{EncryptedSecret, Pair, Secret};
 use std::fs;
 use std::path::PathBuf;
 
@@ -22,8 +22,8 @@ pub enum CurrentScreen {
 
 pub enum CurrentlyEditing {
     Name,
-    Username,
-    Password,
+    Key,
+    Value,
 }
 
 pub struct App {
@@ -35,8 +35,9 @@ pub struct App {
     pub password_store: PathBuf,
     pub secrets_per_row: usize,
     pub name_input: String,
-    pub username_input: String,
-    pub password_input: String,
+    pub key_input: String,
+    pub value_input: String,
+    pub secret_scratch_content: Vec<Pair>,
     pub scratch: String,
 
     key: [u8; 32],
@@ -47,6 +48,7 @@ impl App {
     pub fn new(password_attempt: &str) -> App {
         let mut app = App {
             secrets: Vec::new(),
+            secret_scratch_content: Vec::new(),
             current_screen: CurrentScreen::Login,
             currently_selected_secret_idx: None,
             currently_editing: None,
@@ -56,30 +58,16 @@ impl App {
             password_store: PathBuf::from("/home/chandler/grimoire/password_store/"),
             secrets_per_row: 3,
             name_input: String::from(""),
-            username_input: String::new(),
-            password_input: String::new(),
+            key_input: String::new(),
+            value_input: String::new(),
             scratch: String::new(),
             key: [0u8; 32],
         };
         // init the master_password and secret store
         app.init();
         app
-
-        // call authenticate in main.rs under the Login branch of the match statement
-        /*let attempt = app.authenticate(password_attempt);
-        if attempt.expect("Error") {
-            let salt = app.get_salt();
-            let mut key = [0u8; 32];
-            Argon2::default()
-                .hash_password_into(password_attempt.as_bytes(), &salt, &mut key)
-                .unwrap();
-            app.key = key;
-            let _ = app.populate_secrets(key);
-            app
-        } else {
-            std::process::exit(1)
-        }*/
     }
+
     pub fn authenticate(
         &mut self,
         master_password: &str,
@@ -196,8 +184,16 @@ impl App {
         Ok(())
     }
 
-    pub fn add_secret(&mut self, name: &str, username: &str, password: &str) {
-        let secret = Secret::new(name, username, password);
+    pub fn add_pair(&mut self) {
+        let pair = Pair {
+            key: self.key_input.clone(),
+            value: self.value_input.clone(),
+        };
+        self.secret_scratch_content.push(pair);
+    }
+
+    pub fn save_secret(&mut self) {
+        let secret = Secret::new(&self.name_input, self.secret_scratch_content.clone());
         secret.save(self.key, self.password_store.clone());
         self.secrets.push(secret);
     }
@@ -218,40 +214,24 @@ impl App {
         }
         //
         //Resave with new values
-        self.add_secret(
-            &self.name_input.clone(),
-            &self.username_input.clone(),
-            &self.password_input.clone(),
-        )
+        self.save_secret()
     }
 
     pub fn increment_currently_editing(&mut self) {
         match self.currently_editing {
             None => self.currently_editing = Some(CurrentlyEditing::Name),
-            Some(CurrentlyEditing::Name) => {
-                self.currently_editing = Some(CurrentlyEditing::Username)
-            }
-            Some(CurrentlyEditing::Username) => {
-                self.currently_editing = Some(CurrentlyEditing::Password)
-            }
-            Some(CurrentlyEditing::Password) => {
-                self.currently_editing = Some(CurrentlyEditing::Name)
-            }
+            Some(CurrentlyEditing::Name) => self.currently_editing = Some(CurrentlyEditing::Key),
+            Some(CurrentlyEditing::Key) => self.currently_editing = Some(CurrentlyEditing::Value),
+            Some(CurrentlyEditing::Value) => self.currently_editing = Some(CurrentlyEditing::Name),
         }
     }
 
     pub fn decrement_currently_editing(&mut self) {
         match self.currently_editing {
-            None => self.currently_editing = Some(CurrentlyEditing::Password),
-            Some(CurrentlyEditing::Name) => {
-                self.currently_editing = Some(CurrentlyEditing::Password)
-            }
-            Some(CurrentlyEditing::Username) => {
-                self.currently_editing = Some(CurrentlyEditing::Name)
-            }
-            Some(CurrentlyEditing::Password) => {
-                self.currently_editing = Some(CurrentlyEditing::Username)
-            }
+            None => self.currently_editing = Some(CurrentlyEditing::Value),
+            Some(CurrentlyEditing::Name) => self.currently_editing = Some(CurrentlyEditing::Value),
+            Some(CurrentlyEditing::Key) => self.currently_editing = Some(CurrentlyEditing::Name),
+            Some(CurrentlyEditing::Value) => self.currently_editing = Some(CurrentlyEditing::Key),
         }
     }
 
@@ -259,8 +239,9 @@ impl App {
         self.currently_selected_secret_idx = None;
         self.currently_editing = None;
         self.name_input.clear();
-        self.username_input.clear();
-        self.password_input.clear();
+        self.key_input.clear();
+        self.value_input.clear();
+        self.secret_scratch_content.clear();
         self.scratch.clear();
     }
 
@@ -269,8 +250,7 @@ impl App {
             Some(current_idx) => {
                 if let Some(secret) = self.secrets.get(current_idx) {
                     self.name_input = String::from(secret.get_name());
-                    self.username_input = String::from(secret.get_username());
-                    self.password_input = String::from(secret.get_password());
+                    self.secret_scratch_content = secret.get_contents();
                 }
             }
             _ => {}

@@ -6,15 +6,19 @@ use base64::{Engine as _, engine::general_purpose};
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::env;
 use std::fs;
 use std::path::PathBuf;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Pair {
+    pub key: String,
+    pub value: String,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Secret {
     name: String,
-    username: String,
-    password: String,
+    contents: Vec<Pair>,
     last_modified: DateTime<Local>,
 }
 
@@ -25,11 +29,10 @@ pub struct EncryptedSecret {
 }
 
 impl Secret {
-    pub fn new(name: &str, username: &str, password: &str) -> Secret {
+    pub fn new(name: &str, contents: Vec<Pair>) -> Secret {
         Secret {
             name: String::from(name),
-            username: String::from(username),
-            password: String::from(password),
+            contents,
             last_modified: Local::now(),
         }
     }
@@ -74,16 +77,8 @@ impl Secret {
         self.name.as_str()
     }
 
-    pub fn get_username(&self) -> &str {
-        self.username.as_str()
-    }
-
-    pub fn get_password(&self) -> &str {
-        self.password.as_str()
-    }
-
-    pub fn get_last_modified(&self) -> DateTime<Local> {
-        self.last_modified
+    pub fn get_contents(&self) -> Vec<Pair> {
+        self.contents.clone()
     }
 }
 

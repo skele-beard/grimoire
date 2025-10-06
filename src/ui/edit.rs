@@ -26,13 +26,13 @@ pub fn render_edit_popup(frame: &mut Frame, app: &App) {
 
     let active_style = Style::default().bg(Color::Cyan).fg(Color::Black);
     let mut name = Block::default().title("Name").borders(Borders::ALL);
-    let mut user = Block::default().title("Username").borders(Borders::ALL);
-    let mut pass = Block::default().title("Password").borders(Borders::ALL);
+    let mut key = Block::default().title("Key").borders(Borders::ALL);
+    let mut value = Block::default().title("Value").borders(Borders::ALL);
 
     match app.currently_editing {
         Some(CurrentlyEditing::Name) => name = name.style(active_style),
-        Some(CurrentlyEditing::Username) => user = user.style(active_style),
-        Some(CurrentlyEditing::Password) => pass = pass.style(active_style),
+        Some(CurrentlyEditing::Key) => key = key.style(active_style),
+        Some(CurrentlyEditing::Value) => value = value.style(active_style),
         None => {}
     }
 
@@ -43,15 +43,15 @@ pub fn render_edit_popup(frame: &mut Frame, app: &App) {
         chunks[0],
     );
     frame.render_widget(
-        Paragraph::new(app.username_input.clone())
+        Paragraph::new(app.key_input.clone())
             .wrap(Wrap { trim: true })
-            .block(user),
+            .block(key),
         chunks[1],
     );
     frame.render_widget(
-        Paragraph::new(app.password_input.clone())
+        Paragraph::new(app.value_input.clone())
             .wrap(Wrap { trim: true })
-            .block(pass),
+            .block(value),
         chunks[2],
     );
 }

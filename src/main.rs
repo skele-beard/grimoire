@@ -90,14 +90,8 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                         app.increment_currently_editing();
                     }
                     KeyCode::Enter => {
-                        app.add_secret(
-                            // This could  be improved by not passing
-                            // args since they are included in app's state. For now, I'm going to leave
-                            // it this way.
-                            &app.name_input.clone(),
-                            &app.username_input.clone(),
-                            &app.password_input.clone(),
-                        );
+                        app.add_pair();
+                        app.save_secret();
                         app.current_screen = CurrentScreen::Main;
                         app.clear_input_fields();
                     }
@@ -110,11 +104,11 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                                 CurrentlyEditing::Name => {
                                     app.name_input.pop();
                                 }
-                                CurrentlyEditing::Username => {
-                                    app.username_input.pop();
+                                CurrentlyEditing::Key => {
+                                    app.key_input.pop();
                                 }
-                                CurrentlyEditing::Password => {
-                                    app.password_input.pop();
+                                CurrentlyEditing::Value => {
+                                    app.value_input.pop();
                                 }
                             }
                         }
@@ -123,8 +117,8 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                         if let Some(editing) = &app.currently_editing {
                             match editing {
                                 CurrentlyEditing::Name => app.name_input.push(value),
-                                CurrentlyEditing::Username => app.username_input.push(value),
-                                CurrentlyEditing::Password => app.password_input.push(value),
+                                CurrentlyEditing::Key => app.key_input.push(value),
+                                CurrentlyEditing::Value => app.value_input.push(value),
                             }
                         }
                     }
@@ -153,11 +147,11 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                                 CurrentlyEditing::Name => {
                                     app.name_input.pop();
                                 }
-                                CurrentlyEditing::Username => {
-                                    app.username_input.pop();
+                                CurrentlyEditing::Key => {
+                                    app.key_input.pop();
                                 }
-                                CurrentlyEditing::Password => {
-                                    app.password_input.pop();
+                                CurrentlyEditing::Value => {
+                                    app.value_input.pop();
                                 }
                             }
                         }
@@ -166,8 +160,8 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                         if let Some(editing) = &app.currently_editing {
                             match editing {
                                 CurrentlyEditing::Name => app.name_input.push(value),
-                                CurrentlyEditing::Username => app.username_input.push(value),
-                                CurrentlyEditing::Password => app.password_input.push(value),
+                                CurrentlyEditing::Key => app.key_input.push(value),
+                                CurrentlyEditing::Value => app.value_input.push(value),
                             }
                         }
                     }
