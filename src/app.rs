@@ -22,8 +22,8 @@ pub enum CurrentScreen {
 
 pub enum CurrentlyEditing {
     Name,
-    Key,
-    Value,
+    Key(usize),
+    Value(usize),
 }
 
 pub struct App {
@@ -198,6 +198,18 @@ impl App {
         self.secrets.push(secret);
     }
 
+    pub fn load_secret(&mut self) {
+        match self.currently_selected_secret_idx {
+            Some(current_idx) => {
+                if let Some(secret) = self.secrets.get(current_idx) {
+                    self.name_input = String::from(secret.get_name());
+                    self.secret_scratch_content = secret.get_contents();
+                }
+            }
+            _ => (),
+        }
+    }
+
     // The only reason this method needs to exist is if the name is changed - we don't want the old
     // secret lingering around
     pub fn update_secret(&mut self) {
@@ -220,18 +232,41 @@ impl App {
     pub fn increment_currently_editing(&mut self) {
         match self.currently_editing {
             None => self.currently_editing = Some(CurrentlyEditing::Name),
-            Some(CurrentlyEditing::Name) => self.currently_editing = Some(CurrentlyEditing::Key),
-            Some(CurrentlyEditing::Key) => self.currently_editing = Some(CurrentlyEditing::Value),
-            Some(CurrentlyEditing::Value) => self.currently_editing = Some(CurrentlyEditing::Name),
+            Some(CurrentlyEditing::Name) => self.currently_editing = Some(CurrentlyEditing::Key(0)),
+            Some(CurrentlyEditing::Key(idx)) => {
+                self.currently_editing = Some(CurrentlyEditing::Value(idx))
+            }
+            Some(CurrentlyEditing::Value(idx)) => {
+                if idx == self.secret_scratch_content.len() {
+                    self.currently_editing = Some(CurrentlyEditing::Name)
+                } else {
+                    self.currently_editing = Some(CurrentlyEditing::Key(idx + 1))
+                }
+            }
         }
     }
 
     pub fn decrement_currently_editing(&mut self) {
         match self.currently_editing {
-            None => self.currently_editing = Some(CurrentlyEditing::Value),
-            Some(CurrentlyEditing::Name) => self.currently_editing = Some(CurrentlyEditing::Value),
-            Some(CurrentlyEditing::Key) => self.currently_editing = Some(CurrentlyEditing::Name),
-            Some(CurrentlyEditing::Value) => self.currently_editing = Some(CurrentlyEditing::Key),
+            None => {
+                self.currently_editing = Some(CurrentlyEditing::Value(
+                    self.secret_scratch_content.len() - 1,
+                ))
+            }
+            Some(CurrentlyEditing::Name) => {
+                self.currently_editing =
+                    Some(CurrentlyEditing::Value(self.secret_scratch_content.len()))
+            }
+            Some(CurrentlyEditing::Key(idx)) => {
+                if idx == 0 {
+                    self.currently_editing = Some(CurrentlyEditing::Name)
+                } else {
+                    self.currently_editing = Some(CurrentlyEditing::Value(idx - 1))
+                }
+            }
+            Some(CurrentlyEditing::Value(idx)) => {
+                self.currently_editing = Some(CurrentlyEditing::Key(idx))
+            }
         }
     }
 
@@ -245,7 +280,7 @@ impl App {
         self.scratch.clear();
     }
 
-    pub fn populate_input_fields_from_secret(&mut self) {
+    /*pub fn populate_input_fields_from_secret(&mut self) {
         match self.currently_selected_secret_idx {
             Some(current_idx) => {
                 if let Some(secret) = self.secrets.get(current_idx) {
@@ -254,6 +289,18 @@ impl App {
                 }
             }
             _ => {}
+        }
+    }*/
+    pub fn current_secret(&self) -> Option<&Secret> {
+        match self.currently_selected_secret_idx {
+            Some(current_idx) => {
+                if let Some(secret) = self.secrets.get(current_idx) {
+                    Some(secret)
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 

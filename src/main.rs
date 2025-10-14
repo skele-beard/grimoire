@@ -72,9 +72,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                         app.currently_editing = Some(CurrentlyEditing::Name);
                     }
                     KeyCode::Enter => {
+                        app.load_secret();
                         app.current_screen = CurrentScreen::Editing;
                         app.currently_editing = Some(CurrentlyEditing::Name);
-                        app.populate_input_fields_from_secret();
                     }
                     KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down => {
                         app.select_new_secret(key.code);
@@ -104,10 +104,10 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                                 CurrentlyEditing::Name => {
                                     app.name_input.pop();
                                 }
-                                CurrentlyEditing::Key => {
+                                CurrentlyEditing::Key(_) => {
                                     app.key_input.pop();
                                 }
-                                CurrentlyEditing::Value => {
+                                CurrentlyEditing::Value(_) => {
                                     app.value_input.pop();
                                 }
                             }
@@ -117,8 +117,8 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                         if let Some(editing) = &app.currently_editing {
                             match editing {
                                 CurrentlyEditing::Name => app.name_input.push(value),
-                                CurrentlyEditing::Key => app.key_input.push(value),
-                                CurrentlyEditing::Value => app.value_input.push(value),
+                                CurrentlyEditing::Key(_) => app.key_input.push(value),
+                                CurrentlyEditing::Value(_) => app.value_input.push(value),
                             }
                         }
                     }
@@ -134,6 +134,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     }
                     KeyCode::Enter => {
                         // You need to save the new value
+                        app.add_pair();
                         app.update_secret();
                         app.clear_input_fields();
                         app.current_screen = CurrentScreen::Main;
@@ -147,11 +148,19 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                                 CurrentlyEditing::Name => {
                                     app.name_input.pop();
                                 }
-                                CurrentlyEditing::Key => {
-                                    app.key_input.pop();
+                                CurrentlyEditing::Key(idx) => {
+                                    if *idx == app.secret_scratch_content.len() {
+                                        app.key_input.pop();
+                                    } else {
+                                        app.secret_scratch_content[*idx].key.pop();
+                                    }
                                 }
-                                CurrentlyEditing::Value => {
-                                    app.value_input.pop();
+                                CurrentlyEditing::Value(idx) => {
+                                    if *idx == app.secret_scratch_content.len() {
+                                        app.value_input.pop();
+                                    } else {
+                                        app.secret_scratch_content[*idx].value.pop();
+                                    }
                                 }
                             }
                         }
@@ -160,8 +169,20 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                         if let Some(editing) = &app.currently_editing {
                             match editing {
                                 CurrentlyEditing::Name => app.name_input.push(value),
-                                CurrentlyEditing::Key => app.key_input.push(value),
-                                CurrentlyEditing::Value => app.value_input.push(value),
+                                CurrentlyEditing::Key(idx) => {
+                                    if *idx == app.secret_scratch_content.len() {
+                                        app.key_input.push(value)
+                                    } else {
+                                        app.secret_scratch_content[*idx].key.push(value)
+                                    }
+                                }
+                                CurrentlyEditing::Value(idx) => {
+                                    if *idx == app.secret_scratch_content.len() {
+                                        app.value_input.push(value)
+                                    } else {
+                                        app.secret_scratch_content[*idx].value.push(value)
+                                    }
+                                }
                             }
                         }
                     }

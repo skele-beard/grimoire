@@ -2,56 +2,130 @@ use super::utils::centered_rect;
 use crate::app::{App, CurrentlyEditing};
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    text::{Line, Span},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
 };
 
 pub fn render_edit_popup(frame: &mut Frame, app: &App) {
-    let area = centered_rect(60, 25, frame.area());
-    let popup = Block::default()
-        .title("Enter secret values")
-        .style(Style::default().bg(Color::DarkGray));
-    frame.render_widget(popup, area);
+    frame.render_widget(Clear, frame.area());
+    let full_area = centered_rect(70, 80, frame.area());
 
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .margin(1)
-        .constraints([
-            Constraint::Percentage(33),
-            Constraint::Percentage(33),
-            Constraint::Percentage(34),
-        ])
-        .split(area);
+    let pairs_to_render = app.secret_scratch_content.clone();
+    let name_to_render = app.name_input.clone();
 
-    let active_style = Style::default().bg(Color::Cyan).fg(Color::Black);
-    let mut name = Block::default().title("Name").borders(Borders::ALL);
-    let mut key = Block::default().title("Key").borders(Borders::ALL);
-    let mut value = Block::default().title("Value").borders(Borders::ALL);
+    // Layout: name, spacer, each pair, new entry, hint
+    let mut constraints = vec![
+        Constraint::Length(3), // name field
+        Constraint::Length(1), // spacer
+    ];
+    constraints.extend(std::iter::repeat(Constraint::Length(3)).take(pairs_to_render.len()));
+    constraints.push(Constraint::Length(3)); // new entry
+    constraints.push(Constraint::Length(1)); // hint
 
-    match app.currently_editing {
-        Some(CurrentlyEditing::Name) => name = name.style(active_style),
-        Some(CurrentlyEditing::Key) => key = key.style(active_style),
-        Some(CurrentlyEditing::Value) => value = value.style(active_style),
-        None => {}
+    let layout_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints(constraints)
+        .split(full_area);
+
+    // --- Name field ---
+    let name_border_style = if matches!(app.currently_editing, Some(CurrentlyEditing::Name)) {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::White)
+    };
+
+    let name_field = Paragraph::new(name_to_render.clone())
+        .alignment(Alignment::Center)
+        .style(if name_to_render.is_empty() {
+            Style::default().fg(Color::DarkGray)
+        } else {
+            Style::default().fg(Color::Green)
+        })
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(name_border_style)
+                .title("Name"),
+        );
+
+    frame.render_widget(name_field, layout_chunks[0]);
+
+    // --- Pairs ---
+    let offset = 2;
+    for (i, pair) in pairs_to_render.iter().enumerate() {
+        let selected = matches!(app.currently_editing, Some(CurrentlyEditing::Key(idx)) if i == idx)
+            || matches!(app.currently_editing, Some(CurrentlyEditing::Value(idx)) if i == idx);
+
+        let border_style = if selected {
+            Style::default().fg(Color::Cyan)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        let pair_text = Line::from(vec![
+            Span::styled(
+                format!("{:<15}", pair.key),
+                Style::default().fg(Color::Cyan),
+            ),
+            Span::raw(" : "),
+            Span::styled(
+                format!("{:<15}", pair.value),
+                Style::default().fg(Color::Yellow),
+            ),
+        ]);
+
+        let pair_block = Paragraph::new(pair_text)
+            .alignment(Alignment::Center)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(border_style)
+                    .border_type(BorderType::Rounded)
+                    .title(format!("Entry {}", i + 1)),
+            )
+            .wrap(Wrap { trim: true });
+
+        frame.render_widget(pair_block, layout_chunks[i + offset]);
     }
 
+    // --- New entry field ---
+    let selected_new_entry = matches!(app.currently_editing, Some(CurrentlyEditing::Key(idx)) if pairs_to_render.len() == idx)
+        || matches!(app.currently_editing, Some(CurrentlyEditing::Value(idx)) if pairs_to_render.len() == idx);
+    let new_entry_border_style = if selected_new_entry {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::White)
+    };
+
+    let new_entry_text = if app.key_input.is_empty() && app.value_input.is_empty() {
+        "<new key> : <new value>".to_string()
+    } else {
+        format!("{} : {}", app.key_input, app.value_input)
+    };
+
+    let new_entry_block = Paragraph::new(new_entry_text)
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::DarkGray))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(new_entry_border_style)
+                .title("Add new entry"),
+        );
+
     frame.render_widget(
-        Paragraph::new(app.name_input.clone())
-            .wrap(Wrap { trim: true })
-            .block(name),
-        chunks[0],
+        new_entry_block,
+        layout_chunks[pairs_to_render.len() + offset],
     );
-    frame.render_widget(
-        Paragraph::new(app.key_input.clone())
-            .wrap(Wrap { trim: true })
-            .block(key),
-        chunks[1],
-    );
-    frame.render_widget(
-        Paragraph::new(app.value_input.clone())
-            .wrap(Wrap { trim: true })
-            .block(value),
-        chunks[2],
-    );
+
+    // --- Hint ---
+    let hint = Paragraph::new("TAB to move, ENTER to edit, ESC to cancel")
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::DarkGray));
+
+    frame.render_widget(hint, *layout_chunks.last().unwrap());
 }
