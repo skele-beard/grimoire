@@ -5,6 +5,7 @@ use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
 };
 use crossterm::event::KeyCode;
+use dirs::config_dir;
 use rand::distr::{Distribution, Uniform};
 use rand::prelude::*;
 use rand_argon_compatible::rngs::OsRng as OsRng08;
@@ -15,14 +16,37 @@ use std::path::PathBuf;
 
 #[derive(Deserialize)]
 struct Config {
-    master_password_file: String,
-    password_store: String,
+    master_password_file: PathBuf,
+    password_store: PathBuf,
 }
 
 impl Config {
     fn load() -> Self {
-        let content = fs::read_to_string("config.toml").expect("failed to read config");
-        toml::from_str(&content).expect("invalid config")
+        let config_path = config_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("grimoire/config.toml");
+
+        let content = match fs::read_to_string(&config_path) {
+            Ok(s) if !s.trim().is_empty() => s,
+            Ok(_) | Err(_) => {
+                eprintln!("Error reading config, using defaults");
+                String::new()
+            }
+        };
+
+        if !content.trim().is_empty() {
+            if let Ok(cfg) = toml::from_str(&content) {
+                return cfg;
+            } else {
+                eprintln!("Invalid config format, using defaults");
+            }
+        }
+
+        let base_dir = config_dir().unwrap_or_else(|| PathBuf::from("."));
+        Self {
+            master_password_file: base_dir.join("grimoire/password_store/master_password"),
+            password_store: base_dir.join("grimoire/password_store"),
+        }
     }
 }
 
