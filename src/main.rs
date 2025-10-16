@@ -4,7 +4,7 @@ mod secret;
 mod ui;
 
 use app::{App, CurrentScreen, CurrentlyEditing};
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode};
 use ratatui::backend::Backend;
 use ratatui::crossterm::event::DisableMouseCapture;
 use ratatui::crossterm::event::EnableMouseCapture;
@@ -98,6 +98,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     KeyCode::BackTab => {
                         app.decrement_currently_editing();
                     }
+                    KeyCode::Up | KeyCode::Down => {
+                        app.select_new_pair(key.code);
+                    }
                     KeyCode::Backspace | KeyCode::Char('\x08') | KeyCode::Char('\x7f') => {
                         if let Some(editing) = &mut app.currently_editing {
                             match editing {
@@ -141,6 +144,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     }
                     KeyCode::BackTab => {
                         app.decrement_currently_editing();
+                    }
+                    KeyCode::Up | KeyCode::Down => {
+                        app.select_new_pair(key.code);
                     }
                     KeyCode::Backspace | KeyCode::Char('\x08') | KeyCode::Char('\x7f') => {
                         if let Some(editing) = &mut app.currently_editing {

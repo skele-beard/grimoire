@@ -20,6 +20,7 @@ pub enum CurrentScreen {
     Init,
 }
 
+#[derive(Clone)]
 pub enum CurrentlyEditing {
     Name,
     Key(usize),
@@ -333,5 +334,40 @@ impl App {
                 _ => current_idx,
             },
         });
+    }
+
+    pub fn select_new_pair(&mut self, input: KeyCode) {
+        let len = self.secret_scratch_content.len();
+        let current = self
+            .currently_editing
+            .clone()
+            .unwrap_or(CurrentlyEditing::Name);
+
+        let next = match current {
+            CurrentlyEditing::Name => match input {
+                KeyCode::Down => CurrentlyEditing::Key(0),
+                KeyCode::Up => CurrentlyEditing::Key(len),
+                _ => CurrentlyEditing::Name,
+            },
+            CurrentlyEditing::Key(idx) | CurrentlyEditing::Value(idx) => match input {
+                KeyCode::Down => {
+                    if idx == len {
+                        CurrentlyEditing::Name
+                    } else {
+                        CurrentlyEditing::Key(idx + 1)
+                    }
+                }
+                KeyCode::Up => {
+                    if idx == 0 {
+                        CurrentlyEditing::Name
+                    } else {
+                        CurrentlyEditing::Key(idx - 1)
+                    }
+                }
+                _ => CurrentlyEditing::Key(idx),
+            },
+        };
+
+        self.currently_editing = Some(next);
     }
 }

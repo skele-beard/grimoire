@@ -7,8 +7,7 @@ mod utils;
 pub use edit::render_edit_popup;
 pub use init::render_init;
 pub use login::render_login;
-pub use main::{render_footer, render_main, render_secret_card, render_secret_grid, render_title};
-pub use utils::centered_rect;
+pub use main::render_main;
 
 use crate::app::App;
 use crate::app::CurrentScreen;
