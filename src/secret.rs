@@ -61,10 +61,6 @@ impl Secret {
         fs::remove_file(filepath)
     }
 
-    pub fn print(&self) {
-        println!("{:?}", self);
-    }
-
     pub fn to_json(&self) -> String {
         serde_json::to_string(self).unwrap()
     }

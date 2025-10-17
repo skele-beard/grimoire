@@ -70,6 +70,10 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                         app.current_screen = CurrentScreen::New;
                         app.currently_editing = Some(CurrentlyEditing::Name);
                     }
+                    KeyCode::Char('x') => {
+                        app.delete_secret();
+                        app.clear_input_fields();
+                    }
                     KeyCode::Enter => {
                         app.load_secret();
                         app.current_screen = CurrentScreen::Editing;
@@ -88,6 +92,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     KeyCode::Tab => {
                         app.increment_currently_editing();
                     }
+                    KeyCode::Delete => {
+                        app.delete_pair();
+                    }
                     KeyCode::Enter => {
                         app.add_pair();
                         app.save_secret();
@@ -97,7 +104,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     KeyCode::BackTab => {
                         app.decrement_currently_editing();
                     }
-                    KeyCode::Up | KeyCode::Down => {
+                    KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down => {
                         app.select_new_pair(key.code);
                     }
                     KeyCode::Backspace | KeyCode::Char('\x08') | KeyCode::Char('\x7f') => {
@@ -134,6 +141,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     KeyCode::Tab => {
                         app.increment_currently_editing();
                     }
+                    KeyCode::Delete => {
+                        app.delete_pair();
+                    }
                     KeyCode::Enter => {
                         // You need to save the new value
                         app.add_pair();
@@ -144,7 +154,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     KeyCode::BackTab => {
                         app.decrement_currently_editing();
                     }
-                    KeyCode::Up | KeyCode::Down => {
+                    KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down => {
                         app.select_new_pair(key.code);
                     }
                     KeyCode::Backspace | KeyCode::Char('\x08') | KeyCode::Char('\x7f') => {

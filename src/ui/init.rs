@@ -3,7 +3,7 @@ use crate::app::App;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::Text,
     widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
 };
@@ -27,7 +27,6 @@ pub fn render_init(frame: &mut Frame, app: &App) {
         .split(full_area);
 
     let title_area = layout_chunks[0];
-    let description_area = layout_chunks[1];
     let key_area = layout_chunks[2];
     let block_area = layout_chunks[3];
 
@@ -81,7 +80,11 @@ pub fn render_init(frame: &mut Frame, app: &App) {
         .split(key_area);
 
     let art_paragraph = Paragraph::new(KEY_ART)
-        .style(Style::default().fg(Color::Cyan))
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::SLOW_BLINK),
+        )
         .wrap(Wrap { trim: false })
         .alignment(ratatui::layout::Alignment::Left);
 

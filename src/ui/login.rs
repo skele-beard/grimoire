@@ -3,7 +3,7 @@ use crate::app::App;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::Text,
     widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
 };
@@ -74,7 +74,11 @@ pub fn render_login(frame: &mut Frame, app: &App) {
         .split(lock_area);
 
     let art_paragraph = Paragraph::new(LOCK_ART)
-        .style(Style::default().fg(Color::Cyan))
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::SLOW_BLINK),
+        )
         .wrap(Wrap { trim: false })
         .alignment(ratatui::layout::Alignment::Left);
 

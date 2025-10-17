@@ -230,10 +230,30 @@ impl App {
         self.secret_scratch_content.push(pair);
     }
 
+    pub fn delete_pair(&mut self) {
+        match self.currently_editing {
+            Some(CurrentlyEditing::Key(idx)) | Some(CurrentlyEditing::Value(idx)) => {
+                self.secret_scratch_content.remove(idx);
+                self.update_secret();
+            }
+            _ => (),
+        }
+    }
+
     pub fn save_secret(&mut self) {
         let secret = Secret::new(&self.name_input, self.secret_scratch_content.clone());
-        secret.save(self.key, self.password_store.clone());
+        _ = secret.save(self.key, self.password_store.clone());
         self.secrets.push(secret);
+    }
+
+    pub fn delete_secret(&mut self) {
+        match self.currently_selected_secret_idx {
+            Some(current_idx) => {
+                let secret = self.secrets.remove(current_idx);
+                _ = secret.delete(self.password_store.clone());
+            }
+            None => (),
+        }
     }
 
     pub fn load_secret(&mut self) {
@@ -248,21 +268,9 @@ impl App {
         }
     }
 
-    // The only reason this method needs to exist is if the name is changed - we don't want the old
-    // secret lingering around
     pub fn update_secret(&mut self) {
         //Delete secret
-        match self.currently_selected_secret_idx {
-            Some(current_idx) => {
-                if current_idx < self.secrets.len() {
-                    let secret = self.secrets.remove(current_idx);
-                    let filepath = self.password_store.clone();
-                    secret.delete(filepath);
-                }
-            }
-            _ => {}
-        }
-        //
+        self.delete_secret();
         //Resave with new values
         self.save_secret()
     }
@@ -316,30 +324,6 @@ impl App {
         self.value_input.clear();
         self.secret_scratch_content.clear();
         self.scratch.clear();
-    }
-
-    /*pub fn populate_input_fields_from_secret(&mut self) {
-        match self.currently_selected_secret_idx {
-            Some(current_idx) => {
-                if let Some(secret) = self.secrets.get(current_idx) {
-                    self.name_input = String::from(secret.get_name());
-                    self.secret_scratch_content = secret.get_contents();
-                }
-            }
-            _ => {}
-        }
-    }*/
-    pub fn current_secret(&self) -> Option<&Secret> {
-        match self.currently_selected_secret_idx {
-            Some(current_idx) => {
-                if let Some(secret) = self.secrets.get(current_idx) {
-                    Some(secret)
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
     }
 
     pub fn select_new_secret(&mut self, input: KeyCode) {
@@ -401,6 +385,8 @@ impl App {
                         CurrentlyEditing::Key(idx - 1)
                     }
                 }
+                KeyCode::Left => CurrentlyEditing::Key(idx),
+                KeyCode::Right => CurrentlyEditing::Value(idx),
                 _ => CurrentlyEditing::Key(idx),
             },
         };

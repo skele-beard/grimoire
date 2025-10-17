@@ -88,7 +88,12 @@ pub fn render_secret_card(frame: &mut Frame, app: &App, secret: &Secret, idx: us
     let paragraph = Paragraph::new(text)
         .block(
             Block::default()
-                .title(secret.get_name())
+                .title(Span::styled(
+                    secret.get_name(),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ))
                 .borders(Borders::ALL)
                 .style(style),
         )
