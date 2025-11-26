@@ -10,7 +10,7 @@ use rand::distr::{Distribution, Uniform};
 use rand::prelude::*;
 use rand_argon_compatible::rngs::OsRng as OsRng08;
 use secret::{EncryptedSecret, Pair, Secret};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
@@ -78,6 +78,7 @@ pub struct App {
     pub value_input: String,
     pub secret_scratch_content: Vec<Pair>,
     pub scratch: String,
+    pub unlocked: bool,
 
     key: [u8; 32],
 }
@@ -99,6 +100,7 @@ impl App {
             key_input: String::new(),
             value_input: String::new(),
             scratch: String::new(),
+            unlocked: false,
             key: [0u8; 32],
         };
         // init the master_password and secret store
@@ -128,6 +130,7 @@ impl App {
 
             // store and populate
             self.key = key;
+            self.unlocked = true;
             let _ = self.populate_secrets(key);
 
             Ok(true)
@@ -173,7 +176,6 @@ impl App {
         }
         let salt = SaltString::generate(&mut OsRng08);
         let hash = Argon2::default()
-            //.hash_password(self.scratch.as_bytes(), &salt)
             .hash_password(password.as_bytes(), &salt)
             .unwrap();
 
@@ -220,6 +222,53 @@ impl App {
             self.secrets.push(secret);
         }
         Ok(())
+    }
+
+    /// Find credentials for a given domain
+    /// Returns (username, password) if found
+    pub fn get_credentials_for_domain(&self, domain: &str) -> Option<(String, String)> {
+        // Normalize the domain (remove protocol, www, etc.)
+        let normalized_domain = domain
+            .trim()
+            .to_lowercase()
+            .replace("https://", "")
+            .replace("http://", "")
+            .replace("www.", "")
+            .replace(".com", "")
+            .split('/')
+            .next()
+            .unwrap_or("")
+            .to_string();
+
+        // Search through secrets for a match
+        for secret in &self.secrets {
+            let secret_name = secret.get_name().to_lowercase();
+
+            // Check if the secret name contains the domain
+            if secret_name.contains(&normalized_domain) {
+                let contents = secret.get_contents();
+
+                // Look for username and password fields
+                let mut username = None;
+                let mut password = None;
+
+                for pair in contents {
+                    let key_lower = pair.key.to_lowercase();
+                    if key_lower == "username" || key_lower == "user" || key_lower == "email" {
+                        username = Some(pair.value.clone());
+                    } else if key_lower == "password" || key_lower == "pass" {
+                        password = Some(pair.value.clone());
+                    }
+                }
+
+                // If we found both, return them
+                if let (Some(u), Some(p)) = (username, password) {
+                    return Some((u, p));
+                }
+            }
+        }
+
+        None
     }
 
     pub fn add_pair(&mut self) {

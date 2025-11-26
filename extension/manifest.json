@@ -1,0 +1,30 @@
+{
+  "manifest_version": 2,
+  "name": "Grimoire Password Manager",
+  "version": "1.0.0",
+  "description": "Password autofill from Grimoire TUI password manager",
+  
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "<all_urls>",
+    "http://127.0.0.1/*"
+  ],
+  
+  "background": {
+    "scripts": ["background.js"]
+  },
+  
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_title": "Grimoire Password Manager"
+  }
+}
