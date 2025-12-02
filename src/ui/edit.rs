@@ -54,6 +54,14 @@ pub fn render_edit_popup(frame: &mut Frame, app: &App) {
 
     frame.render_widget(name_field, layout_chunks[0]);
 
+    // Calculate the longest key length (including the new entry inputs)
+    let longest_key = pairs_to_render
+        .iter()
+        .map(|p| p.key.len())
+        .chain(std::iter::once(app.key_input.len()))
+        .max()
+        .unwrap_or(0);
+
     // --- Pairs ---
     let offset = 2;
     for (i, pair) in pairs_to_render.iter().enumerate() {
@@ -67,18 +75,14 @@ pub fn render_edit_popup(frame: &mut Frame, app: &App) {
         };
         let pair_text = Line::from(vec![
             Span::styled(
-                format!("{:<15}", pair.key),
+                format!("{:<width$}", pair.key, width = longest_key),
                 Style::default().fg(Color::Cyan),
             ),
             Span::raw(" : "),
-            Span::styled(
-                format!("{:<15}", pair.value),
-                Style::default().fg(Color::Yellow),
-            ),
+            Span::styled(&pair.value, Style::default().fg(Color::Yellow)),
         ]);
 
         let pair_block = Paragraph::new(pair_text)
-            .alignment(Alignment::Center)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
@@ -101,21 +105,32 @@ pub fn render_edit_popup(frame: &mut Frame, app: &App) {
     };
 
     let new_entry_text = if app.key_input.is_empty() && app.value_input.is_empty() {
-        "<new key> : <new value>".to_string()
+        Line::from(vec![
+            Span::styled(
+                format!("{:<width$}", "<new key>", width = longest_key),
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::styled(" : ", Style::default().fg(Color::DarkGray)),
+            Span::styled("<new value>", Style::default().fg(Color::DarkGray)),
+        ])
     } else {
-        format!("{} : {}", app.key_input, app.value_input)
+        Line::from(vec![
+            Span::styled(
+                format!("{:<width$}", app.key_input, width = longest_key),
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::styled(" : ", Style::default().fg(Color::DarkGray)),
+            Span::styled(&app.value_input, Style::default().fg(Color::DarkGray)),
+        ])
     };
 
-    let new_entry_block = Paragraph::new(new_entry_text)
-        .alignment(Alignment::Center)
-        .style(Style::default().fg(Color::DarkGray))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(new_entry_border_style)
-                .title("Add new entry"),
-        );
+    let new_entry_block = Paragraph::new(new_entry_text).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(new_entry_border_style)
+            .title("Add new entry"),
+    );
 
     frame.render_widget(
         new_entry_block,
@@ -129,3 +144,4 @@ pub fn render_edit_popup(frame: &mut Frame, app: &App) {
 
     frame.render_widget(hint, *layout_chunks.last().unwrap());
 }
+

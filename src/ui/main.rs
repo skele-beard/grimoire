@@ -74,13 +74,23 @@ pub fn render_secret_card(frame: &mut Frame, app: &App, secret: &Secret, idx: us
         Style::default().fg(Color::White)
     };
 
+    let pairs_to_render = secret.get_contents();
+
+    let longest_key = pairs_to_render
+        .iter()
+        .map(|p| p.key.len())
+        .chain(std::iter::once(app.key_input.len()))
+        .max()
+        .unwrap_or(0);
+
     let mut text = Text::default();
     for pair in secret.get_contents() {
         text.push_line(Line::from(vec![
             Span::styled(
-                format!("{} : ", pair.key),
+                format!("{:<width$}", pair.key, width = longest_key),
                 Style::default().fg(Color::Yellow),
             ),
+            Span::raw(" : "),
             Span::raw(pair.value),
         ]));
     }

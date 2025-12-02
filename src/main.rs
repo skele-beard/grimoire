@@ -293,6 +293,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: Arc<Mutex<App>>) -> io::
                     KeyCode::Enter => {
                         app.add_pair();
                         app.clear_key_value_fields();
+                        app.increment_currently_editing();
                     }
                     KeyCode::BackTab => {
                         app.decrement_currently_editing();
@@ -341,6 +342,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: Arc<Mutex<App>>) -> io::
                     KeyCode::Enter => {
                         app.add_pair();
                         app.clear_key_value_fields();
+                        app.increment_currently_editing();
                     }
                     KeyCode::BackTab => {
                         app.decrement_currently_editing();
