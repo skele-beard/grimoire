@@ -28,6 +28,7 @@ cargo build --release
 
 # Run the application
 ./target/release/grimoire
+```
 
 ## Security
 
@@ -50,4 +51,3 @@ While Grimoire implements strong security measures, this is ultimately a hobbyis
 ---
 
 **Never forget your master password - it cannot be recovered!**
-
