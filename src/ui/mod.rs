@@ -22,6 +22,7 @@ pub fn ui(frame: &mut Frame, app: &App) {
     }
 
     if app.currently_editing.is_some() {
+        // Please review this. Why is this different from above?
         render_edit_popup(frame, app);
     }
 }

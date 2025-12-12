@@ -276,6 +276,31 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: Arc<Mutex<App>>) -> io::
                     KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down => {
                         app.select_new_secret(key.code);
                     }
+                    KeyCode::Char('/') => {
+                        app.clear_input_fields();
+                        app.current_screen = CurrentScreen::Searching
+                    }
+                    _ => {}
+                },
+                CurrentScreen::Searching => match key.code {
+                    KeyCode::Esc => app.current_screen = CurrentScreen::Main,
+                    KeyCode::Backspace | KeyCode::Char('\x08') | KeyCode::Char('\x7f') => {
+                        if !app.scratch.is_empty() {
+                            app.scratch.pop();
+                        }
+                    }
+                    KeyCode::Enter => {
+                        app.load_secret();
+                        app.current_screen = CurrentScreen::Editing;
+                        app.currently_editing = Some(CurrentlyEditing::Name);
+                    }
+                    KeyCode::Tab => {
+                        app.increment_search_buffer();
+                    }
+                    KeyCode::Char(value) => {
+                        app.scratch.push(value);
+                        app.search_secrets();
+                    }
                     _ => {}
                 },
                 CurrentScreen::New => match key.code {

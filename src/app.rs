@@ -11,6 +11,7 @@ use rand::prelude::*;
 use rand_argon_compatible::rngs::OsRng as OsRng08;
 use secret::{EncryptedSecret, Pair, Secret};
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::fs;
 use std::path::PathBuf;
 
@@ -52,6 +53,7 @@ impl Config {
 
 pub enum CurrentScreen {
     Main,
+    Searching,
     Editing,
     New,
     Login,
@@ -77,6 +79,7 @@ pub struct App {
     pub key_input: String,
     pub value_input: String,
     pub secret_scratch_content: Vec<Pair>,
+    pub search_buffer: VecDeque<usize>,
     pub scratch: String,
     pub unlocked: bool,
 
@@ -90,6 +93,7 @@ impl App {
         let mut app = App {
             secrets: Vec::new(),
             secret_scratch_content: Vec::new(),
+            search_buffer: VecDeque::new(),
             current_screen: CurrentScreen::Login,
             currently_selected_secret_idx: None,
             currently_editing: None,
@@ -271,6 +275,30 @@ impl App {
         None
     }
 
+    pub fn search_secrets(&mut self) {
+        let input = &self.scratch;
+        self.search_buffer = self
+            .secrets
+            .iter()
+            .enumerate()
+            .filter(|(_, secret)| secret.get_name().contains(input)) // if get_name() is a method, use secret.get_name().contains(input)
+            .map(|(i, _)| i)
+            .collect();
+        if !self.search_buffer.is_empty() {
+            self.currently_selected_secret_idx =
+                Some(*self.search_buffer.front().expect("Will never be empty"));
+        }
+    }
+
+    pub fn increment_search_buffer(&mut self) {
+        if !self.search_buffer.is_empty() {
+            let first_element = self.search_buffer.pop_front().expect("Will never be empty");
+            self.search_buffer.push_back(first_element);
+            self.currently_selected_secret_idx =
+                Some(*self.search_buffer.front().expect("Will never be empty"));
+        }
+    }
+
     pub fn add_pair(&mut self) {
         let pair = Pair {
             key: self.key_input.clone(),
@@ -377,6 +405,7 @@ impl App {
         self.value_input.clear();
         self.secret_scratch_content.clear();
         self.scratch.clear();
+        self.search_buffer.clear();
     }
 
     pub fn clear_key_value_fields(&mut self) {
