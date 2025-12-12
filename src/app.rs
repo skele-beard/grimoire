@@ -10,7 +10,7 @@ use rand::distr::{Distribution, Uniform};
 use rand::prelude::*;
 use rand_argon_compatible::rngs::OsRng as OsRng08;
 use secret::{EncryptedSecret, Pair, Secret};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::collections::VecDeque;
 use std::fs;
 use std::path::PathBuf;
@@ -46,7 +46,7 @@ impl Config {
         let base_dir = config_dir().unwrap_or_else(|| PathBuf::from("."));
         Self {
             master_password_file: base_dir.join("grimoire/password_store/master_password"),
-            password_store: base_dir.join("grimoire/password_store"),
+            password_store: base_dir.join("grimoire/password_store.json"),
         }
     }
 }
@@ -97,8 +97,8 @@ impl App {
             current_screen: CurrentScreen::Login,
             currently_selected_secret_idx: None,
             currently_editing: None,
-            master_password_file: PathBuf::from(config.master_password_file),
-            password_store: PathBuf::from(config.password_store),
+            master_password_file: config.master_password_file,
+            password_store: config.password_store,
             secrets_per_row: 3,
             name_input: String::from(""),
             key_input: String::new(),
@@ -135,7 +135,7 @@ impl App {
             // store and populate
             self.key = key;
             self.unlocked = true;
-            let _ = self.populate_secrets(key);
+            let _ = self.populate_secrets();
 
             Ok(true)
         } else {
@@ -215,16 +215,13 @@ impl App {
         }
     }
 
-    fn populate_secrets(&mut self, key: [u8; 32]) -> std::io::Result<()> {
-        for entry in fs::read_dir(self.password_store.clone())? {
-            let entry = entry?;
-            let path = entry.path();
-            if path == self.master_password_file {
-                continue;
-            }
-            let secret: Secret = EncryptedSecret::decrypt(key, path);
-            self.secrets.push(secret);
-        }
+    fn populate_secrets(&mut self) -> std::io::Result<()> {
+        let file_contents = fs::read_to_string(&self.password_store).unwrap();
+        let encrypted_secrets: Vec<EncryptedSecret> = serde_json::from_str(&file_contents).unwrap();
+        self.secrets = encrypted_secrets
+            .iter()
+            .map(|es| es.decrypt(self.key))
+            .collect();
         Ok(())
     }
 
@@ -323,15 +320,25 @@ impl App {
 
     pub fn save_secret(&mut self) {
         let secret = Secret::new(&self.name_input, self.secret_scratch_content.clone());
-        _ = secret.save(self.key, self.password_store.clone());
         self.secrets.push(secret);
+        self.write_secrets_to_disk();
+    }
+
+    pub fn write_secrets_to_disk(&mut self) {
+        let encrypted_secrets: Vec<EncryptedSecret> = self
+            .secrets
+            .iter()
+            .map(|secret| secret.encrypt(self.key))
+            .collect();
+        let file_content = serde_json::to_string(&encrypted_secrets).unwrap();
+        let _ = fs::write(&self.password_store, file_content);
     }
 
     pub fn delete_secret(&mut self) {
         match self.currently_selected_secret_idx {
             Some(current_idx) => {
-                let secret = self.secrets.remove(current_idx);
-                _ = secret.delete(self.password_store.clone());
+                let _ = self.secrets.remove(current_idx);
+                self.write_secrets_to_disk();
             }
             None => (),
         }

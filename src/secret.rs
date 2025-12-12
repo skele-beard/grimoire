@@ -5,9 +5,6 @@ use aes_gcm::{
 use base64::{Engine as _, engine::general_purpose};
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::fs;
-use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pair {
@@ -37,28 +34,16 @@ impl Secret {
         }
     }
 
-    pub fn save(&self, key: [u8; 32], mut filepath: PathBuf) -> Result<(), std::io::Error> {
+    pub fn encrypt(&self, key: [u8; 32]) -> EncryptedSecret {
         let aes_key = Key::<Aes256Gcm>::from_slice(&key).clone();
         let cipher = Aes256Gcm::new(&aes_key);
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
         let ciphertext = cipher.encrypt(&nonce, &*self.to_json().as_ref()).unwrap();
-
-        //write to disk
-        let json = json!({
-            "ciphertext": general_purpose::STANDARD.encode(&ciphertext),
-            "nonce": *nonce
-        });
-
-        filepath.push(&self.name.as_str());
-        filepath.set_extension("json");
-
-        fs::write(filepath, json.to_string())
-    }
-
-    pub fn delete(&self, mut filepath: PathBuf) -> Result<(), std::io::Error> {
-        filepath.push(&self.name.as_str());
-        filepath.set_extension("json");
-        fs::remove_file(filepath)
+        let encoded_ciphertext = general_purpose::STANDARD.encode(&ciphertext);
+        EncryptedSecret {
+            nonce: nonce.into(),
+            ciphertext: encoded_ciphertext,
+        }
     }
 
     pub fn to_json(&self) -> String {
@@ -79,24 +64,14 @@ impl Secret {
 }
 
 impl EncryptedSecret {
-    pub fn decrypt(key: [u8; 32], name: PathBuf) -> Secret {
-        let contents = fs::read_to_string(name); //deserialize here, the problem is that you need to deserialize twice because of the nonce
-        match contents {
-            Ok(text) => {
-                let contents: EncryptedSecret = serde_json::from_str(text.as_str()).unwrap();
-                //println!("{:?}", contents);
-                let ciphertext = general_purpose::STANDARD
-                    .decode(&contents.ciphertext)
-                    .unwrap();
-                let aes_key = Key::<Aes256Gcm>::from_slice(&key).clone();
-                let cipher = Aes256Gcm::new(&aes_key);
-                let nonce = Nonce::from_slice(&contents.nonce);
-                let plaintext = cipher
-                    .decrypt(&nonce, ciphertext.as_slice())
-                    .expect("Couldn't decrypt");
-                Secret::from_json(String::from_utf8(plaintext).unwrap())
-            }
-            Err(e) => panic!("{}", e),
-        }
+    pub fn decrypt(&self, key: [u8; 32]) -> Secret {
+        let ciphertext = general_purpose::STANDARD.decode(&self.ciphertext).unwrap();
+        let aes_key = Key::<Aes256Gcm>::from_slice(&key);
+        let cipher = Aes256Gcm::new(aes_key);
+        let nonce = Nonce::from_slice(&self.nonce);
+        let plaintext = cipher
+            .decrypt(nonce, ciphertext.as_slice())
+            .expect("Couldn't decrypt, secret was malformed - potentially tampered with");
+        Secret::from_json(String::from_utf8(plaintext).unwrap())
     }
 }
