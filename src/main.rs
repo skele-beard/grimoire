@@ -3,8 +3,10 @@ mod secret;
 mod ui;
 
 use app::{App, CurrentScreen, CurrentlyEditing};
+use cli_clipboard::ClipboardProvider;
 use crossterm::event::ModifierKeyCode;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use cursive::reexports::time::format_description::modifier;
 use ratatui::backend::Backend;
 use ratatui::crossterm::event::DisableMouseCapture;
 use ratatui::crossterm::event::EnableMouseCapture;
@@ -290,6 +292,10 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: Arc<Mutex<App>>) -> io::
                             app.scratch.pop();
                         }
                     }
+                    KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        let text = app.clipboard.get_contents().unwrap();
+                        app.scratch.push_str(&text);
+                    }
                     KeyCode::Enter => {
                         app.load_secret();
                         app.current_screen = CurrentScreen::Editing;
@@ -319,13 +325,67 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: Arc<Mutex<App>>) -> io::
                     KeyCode::Enter => {
                         app.add_pair();
                         app.clear_key_value_fields();
-                        app.increment_currently_editing();
                     }
                     KeyCode::BackTab => {
                         app.decrement_currently_editing();
                     }
                     KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down => {
                         app.select_new_pair(key.code);
+                    }
+                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        if let Some(editing) = app.currently_editing.clone() {
+                            let len = app.secret_scratch_content.len();
+                            match editing {
+                                CurrentlyEditing::Name => {
+                                    let text = app.name_input.clone();
+                                    app.clipboard.set_contents(text).unwrap();
+                                }
+                                CurrentlyEditing::Key(idx) => {
+                                    if idx == len {
+                                        let text = app.key_input.clone();
+                                        app.clipboard.set_contents(text).unwrap();
+                                    } else {
+                                        let text = app.secret_scratch_content[idx].key.clone();
+                                        app.clipboard.set_contents(text).unwrap();
+                                    }
+                                }
+                                CurrentlyEditing::Value(idx) => {
+                                    if idx == len {
+                                        let text = app.value_input.clone();
+                                        app.clipboard.set_contents(text).unwrap();
+                                    }
+                                    let text = app.secret_scratch_content[idx].value.clone();
+                                    app.clipboard.set_contents(text).unwrap();
+                                }
+                            }
+                        }
+                    }
+                    KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        if let Some(editing) = app.currently_editing.clone() {
+                            let len = app.secret_scratch_content.len();
+                            match editing {
+                                CurrentlyEditing::Name => {
+                                    let text = app.clipboard.get_contents().unwrap().clone();
+                                    app.name_input.push_str(&text)
+                                }
+                                CurrentlyEditing::Key(idx) => {
+                                    let text = app.clipboard.get_contents().unwrap().clone();
+                                    if idx == len {
+                                        app.key_input.push_str(&text)
+                                    } else {
+                                        app.secret_scratch_content[idx].key.push_str(&text)
+                                    }
+                                }
+                                CurrentlyEditing::Value(idx) => {
+                                    let text = app.clipboard.get_contents().unwrap().clone();
+                                    if idx == len {
+                                        app.value_input.push_str(&text)
+                                    } else {
+                                        app.secret_scratch_content[idx].value.push_str(&text)
+                                    }
+                                }
+                            }
+                        }
                     }
                     KeyCode::Backspace | KeyCode::Char('\x08') | KeyCode::Char('\x7f') => {
                         if let Some(editing) = &app.currently_editing {
@@ -378,18 +438,55 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: Arc<Mutex<App>>) -> io::
                     }
                     KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         if let Some(editing) = app.currently_editing.clone() {
+                            let len = app.secret_scratch_content.len();
                             match editing {
                                 CurrentlyEditing::Name => {
                                     let text = app.name_input.clone();
-                                    app.clipboard.set_text(text).unwrap();
+                                    app.clipboard.set_contents(text).unwrap();
                                 }
-                                CurrentlyEditing::Key(_) => {
-                                    let text = app.key_input.clone();
-                                    app.clipboard.set_text(text).unwrap();
+                                CurrentlyEditing::Key(idx) => {
+                                    if idx == len {
+                                        let text = app.key_input.clone();
+                                        app.clipboard.set_contents(text).unwrap();
+                                    } else {
+                                        let text = app.secret_scratch_content[idx].key.clone();
+                                        app.clipboard.set_contents(text).unwrap();
+                                    }
                                 }
-                                CurrentlyEditing::Value(_) => {
-                                    let text = app.value_input.clone();
-                                    app.clipboard.set_text(text).unwrap();
+                                CurrentlyEditing::Value(idx) => {
+                                    if idx == len {
+                                        let text = app.value_input.clone();
+                                        app.clipboard.set_contents(text).unwrap();
+                                    }
+                                    let text = app.secret_scratch_content[idx].value.clone();
+                                    app.clipboard.set_contents(text).unwrap();
+                                }
+                            }
+                        }
+                    }
+                    KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        if let Some(editing) = app.currently_editing.clone() {
+                            let len = app.secret_scratch_content.len();
+                            match editing {
+                                CurrentlyEditing::Name => {
+                                    let text = app.clipboard.get_contents().unwrap().clone();
+                                    app.name_input.push_str(&text)
+                                }
+                                CurrentlyEditing::Key(idx) => {
+                                    let text = app.clipboard.get_contents().unwrap().clone();
+                                    if idx == len {
+                                        app.key_input.push_str(&text)
+                                    } else {
+                                        app.secret_scratch_content[idx].key.push_str(&text)
+                                    }
+                                }
+                                CurrentlyEditing::Value(idx) => {
+                                    let text = app.clipboard.get_contents().unwrap().clone();
+                                    if idx == len {
+                                        app.value_input.push_str(&text)
+                                    } else {
+                                        app.secret_scratch_content[idx].value.push_str(&text)
+                                    }
                                 }
                             }
                         }
