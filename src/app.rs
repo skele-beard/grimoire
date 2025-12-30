@@ -158,7 +158,7 @@ impl App {
         }
     }
 
-    fn generate_password(length: u8, symbols: bool) -> String {
+    pub fn generate_password(length: u8, symbols: bool) -> String {
         let distr = Uniform::try_from(33..127).unwrap();
         let mut rng = rand::rng();
         let mut password = String::new();

@@ -154,7 +154,7 @@ pub fn render_edit_popup(frame: &mut Frame, app: &App) {
     );
 
     // --- Hint ---
-    let hint = Paragraph::new("TAB to move, ENTER to edit, ESC to cancel")
+    let hint = Paragraph::new("TAB to move, <CTRL + G> to generate a random value, ENTER to save and close, ESC to cancel WITHOUT saving")
         .alignment(Alignment::Center)
         .style(Style::default().fg(Color::DarkGray));
 

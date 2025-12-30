@@ -387,6 +387,35 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: Arc<Mutex<App>>) -> io::
                             }
                         }
                     }
+                    KeyCode::Char('g') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        if let Some(editing) = app.currently_editing.clone() {
+                            let len = app.secret_scratch_content.len();
+                            match editing {
+                                CurrentlyEditing::Name => {
+                                    let generated_name = App::generate_password(32, true);
+                                    app.name_input.push_str(&generated_name);
+                                }
+                                CurrentlyEditing::Key(idx) => {
+                                    let generated_key = App::generate_password(32, true);
+                                    if idx == len {
+                                        app.key_input.push_str(&generated_key)
+                                    } else {
+                                        app.secret_scratch_content[idx].key.push_str(&generated_key)
+                                    }
+                                }
+                                CurrentlyEditing::Value(idx) => {
+                                    let generated_value = App::generate_password(32, true);
+                                    if idx == len {
+                                        app.value_input.push_str(&generated_value)
+                                    } else {
+                                        app.secret_scratch_content[idx]
+                                            .value
+                                            .push_str(&generated_value)
+                                    }
+                                }
+                            }
+                        }
+                    }
                     KeyCode::Backspace | KeyCode::Char('\x08') | KeyCode::Char('\x7f') => {
                         if let Some(editing) = &app.currently_editing {
                             match editing {
@@ -486,6 +515,35 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: Arc<Mutex<App>>) -> io::
                                         app.value_input.push_str(&text)
                                     } else {
                                         app.secret_scratch_content[idx].value.push_str(&text)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    KeyCode::Char('g') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        if let Some(editing) = app.currently_editing.clone() {
+                            let len = app.secret_scratch_content.len();
+                            match editing {
+                                CurrentlyEditing::Name => {
+                                    let generated_name = App::generate_password(32, true);
+                                    app.name_input.push_str(&generated_name);
+                                }
+                                CurrentlyEditing::Key(idx) => {
+                                    let generated_key = App::generate_password(32, true);
+                                    if idx == len {
+                                        app.key_input.push_str(&generated_key)
+                                    } else {
+                                        app.secret_scratch_content[idx].key.push_str(&generated_key)
+                                    }
+                                }
+                                CurrentlyEditing::Value(idx) => {
+                                    let generated_value = App::generate_password(32, true);
+                                    if idx == len {
+                                        app.value_input.push_str(&generated_value)
+                                    } else {
+                                        app.secret_scratch_content[idx]
+                                            .value
+                                            .push_str(&generated_value)
                                     }
                                 }
                             }
