@@ -4,9 +4,7 @@ mod ui;
 
 use app::{App, CurrentScreen, CurrentlyEditing};
 use cli_clipboard::ClipboardProvider;
-use crossterm::event::ModifierKeyCode;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
-use cursive::reexports::time::format_description::modifier;
 use ratatui::backend::Backend;
 use ratatui::crossterm::event::DisableMouseCapture;
 use ratatui::crossterm::event::EnableMouseCapture;
@@ -392,11 +390,11 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: Arc<Mutex<App>>) -> io::
                             let len = app.secret_scratch_content.len();
                             match editing {
                                 CurrentlyEditing::Name => {
-                                    let generated_name = App::generate_password(32, true);
+                                    let generated_name = app.generate_password();
                                     app.name_input.push_str(&generated_name);
                                 }
                                 CurrentlyEditing::Key(idx) => {
-                                    let generated_key = App::generate_password(32, true);
+                                    let generated_key = app.generate_password();
                                     if idx == len {
                                         app.key_input.push_str(&generated_key)
                                     } else {
@@ -404,7 +402,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: Arc<Mutex<App>>) -> io::
                                     }
                                 }
                                 CurrentlyEditing::Value(idx) => {
-                                    let generated_value = App::generate_password(32, true);
+                                    let generated_value = app.generate_password();
                                     if idx == len {
                                         app.value_input.push_str(&generated_value)
                                     } else {
@@ -525,11 +523,11 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: Arc<Mutex<App>>) -> io::
                             let len = app.secret_scratch_content.len();
                             match editing {
                                 CurrentlyEditing::Name => {
-                                    let generated_name = App::generate_password(32, true);
+                                    let generated_name = app.generate_password();
                                     app.name_input.push_str(&generated_name);
                                 }
                                 CurrentlyEditing::Key(idx) => {
-                                    let generated_key = App::generate_password(32, true);
+                                    let generated_key = app.generate_password();
                                     if idx == len {
                                         app.key_input.push_str(&generated_key)
                                     } else {
@@ -537,7 +535,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: Arc<Mutex<App>>) -> io::
                                     }
                                 }
                                 CurrentlyEditing::Value(idx) => {
-                                    let generated_value = App::generate_password(32, true);
+                                    let generated_value = app.generate_password();
                                     if idx == len {
                                         app.value_input.push_str(&generated_value)
                                     } else {

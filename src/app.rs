@@ -17,9 +17,12 @@ use std::fs;
 use std::path::PathBuf;
 
 #[derive(Deserialize)]
-struct Config {
+pub struct Config {
     master_password_file: PathBuf,
     password_store: PathBuf,
+    pub secrets_per_row: usize,
+    pub password_generator_length: u8,
+    pub password_generator_symbols_flag: bool,
 }
 
 impl Config {
@@ -27,6 +30,7 @@ impl Config {
         let config_path = config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("grimoire/config.toml");
+        eprintln!("{:?}", config_path);
 
         let content = match fs::read_to_string(&config_path) {
             Ok(s) if !s.trim().is_empty() => s,
@@ -48,6 +52,9 @@ impl Config {
         Self {
             master_password_file: base_dir.join("grimoire/password_store/master_password"),
             password_store: base_dir.join("grimoire/password_store.json"),
+            secrets_per_row: 3,
+            password_generator_length: 16,
+            password_generator_symbols_flag: true,
         }
     }
 }
@@ -70,12 +77,10 @@ pub enum CurrentlyEditing {
 
 pub struct App {
     pub secrets: Vec<Secret>,
+    pub config: Config,
     pub current_screen: CurrentScreen,
     pub currently_editing: Option<CurrentlyEditing>,
     pub currently_selected_secret_idx: Option<usize>,
-    pub master_password_file: PathBuf,
-    pub password_store: PathBuf,
-    pub secrets_per_row: usize,
     pub name_input: String,
     pub key_input: String,
     pub value_input: String,
@@ -90,17 +95,14 @@ pub struct App {
 #[allow(clippy::single_match)]
 impl App {
     pub fn new() -> App {
-        let config = Config::load();
         let mut app = App {
             secrets: Vec::new(),
+            config: Config::load(),
             secret_scratch_content: Vec::new(),
             search_buffer: VecDeque::new(),
             current_screen: CurrentScreen::Login,
             currently_selected_secret_idx: None,
             currently_editing: None,
-            master_password_file: config.master_password_file,
-            password_store: config.password_store,
-            secrets_per_row: 3,
             name_input: String::from(""),
             key_input: String::new(),
             value_input: String::new(),
@@ -119,7 +121,8 @@ impl App {
         master_password: &str,
     ) -> Result<bool, argon2::password_hash::Error> {
         // read stored hash
-        let hash = fs::read_to_string(&self.master_password_file).expect("should have read file");
+        let hash =
+            fs::read_to_string(&self.config.master_password_file).expect("should have read file");
         let parsed_hash = PasswordHash::new(&hash)?;
 
         // verify the password
@@ -146,7 +149,8 @@ impl App {
     }
 
     fn get_salt(&self) -> [u8; 16] {
-        let hash = fs::read_to_string(&self.master_password_file).expect("Should have read file");
+        let hash =
+            fs::read_to_string(&self.config.master_password_file).expect("Should have read file");
         let hash_obj = PasswordHash::new(&hash).unwrap();
         match hash_obj.salt {
             Some(salt) => {
@@ -158,7 +162,9 @@ impl App {
         }
     }
 
-    pub fn generate_password(length: u8, symbols: bool) -> String {
+    pub fn generate_password(&self) -> String {
+        let symbols = self.config.password_generator_symbols_flag;
+        let length = self.config.password_generator_length;
         let distr = Uniform::try_from(33..127).unwrap();
         let mut rng = rand::rng();
         let mut password = String::new();
@@ -177,7 +183,7 @@ impl App {
 
     pub fn set_master_password(&mut self) {
         let password = self.scratch.clone();
-        if let Some(parent) = &self.master_password_file.parent() {
+        if let Some(parent) = &self.config.master_password_file.parent() {
             fs::create_dir_all(parent).expect("Couldn't create parent directories");
         }
         let salt = SaltString::generate(&mut OsRng08);
@@ -188,7 +194,7 @@ impl App {
         let mut text = String::new();
         text.push_str(hash.to_string().as_str());
 
-        match fs::write(&self.master_password_file, text) {
+        match fs::write(&self.config.master_password_file, text) {
             Ok(_) => (),
             Err(e) => panic!("{}", e),
         }
@@ -204,7 +210,7 @@ impl App {
     }
 
     fn init(&mut self) {
-        let contents = fs::read_to_string(&self.master_password_file);
+        let contents = fs::read_to_string(&self.config.master_password_file);
         match contents {
             Ok(text) => {
                 if text.is_empty() {
@@ -218,7 +224,7 @@ impl App {
     }
 
     fn populate_secrets(&mut self) -> std::io::Result<()> {
-        let file_contents = fs::read_to_string(&self.password_store).unwrap();
+        let file_contents = fs::read_to_string(&self.config.password_store).unwrap();
         let encrypted_secrets: Vec<EncryptedSecret> = serde_json::from_str(&file_contents).unwrap();
         self.secrets = encrypted_secrets
             .iter()
@@ -335,7 +341,7 @@ impl App {
             .map(|secret| secret.encrypt(self.key))
             .collect();
         let file_content = serde_json::to_string(&encrypted_secrets).unwrap();
-        let _ = fs::write(&self.password_store, file_content);
+        let _ = fs::write(&self.config.password_store, file_content);
     }
 
     pub fn delete_secret(&mut self) {
@@ -441,13 +447,13 @@ impl App {
                     }
                 }
                 KeyCode::Right => (current_idx + 1) % len,
-                KeyCode::Down => (current_idx + self.secrets_per_row) % len,
+                KeyCode::Down => (current_idx + self.config.secrets_per_row) % len,
                 KeyCode::Up => {
-                    if current_idx < self.secrets_per_row {
+                    if current_idx < self.config.secrets_per_row {
                         // wrap to bottom row
-                        (len + current_idx).saturating_sub(self.secrets_per_row) % len
+                        (len + current_idx).saturating_sub(self.config.secrets_per_row) % len
                     } else {
-                        current_idx - self.secrets_per_row
+                        current_idx - self.config.secrets_per_row
                     }
                 }
                 _ => current_idx,

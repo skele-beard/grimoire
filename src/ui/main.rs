@@ -39,7 +39,7 @@ pub fn render_title(frame: &mut Frame, area: Rect) {
 pub fn render_secret_grid(frame: &mut Frame, app: &App, area: Rect) {
     let secrets = &app.secrets;
     let total = secrets.len();
-    let cols = app.secrets_per_row;
+    let cols = app.config.secrets_per_row;
     let rows = (total + cols - 1) / cols;
 
     let row_constraints = vec![Constraint::Length(9); rows];
