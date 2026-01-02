@@ -18,7 +18,7 @@ Grimoire is a password management solution designed to help you securely store a
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/grimoire.git
+git clone https://github.com/skele-beard/grimoire.git
 
 # Navigate to the project directory
 cd grimoire
