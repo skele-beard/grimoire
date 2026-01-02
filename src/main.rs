@@ -25,6 +25,8 @@ use ui::ui;
 struct HttpRequest {
     action: String,
     domain: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -32,6 +34,7 @@ struct HttpResponse {
     ok: bool,
     username: Option<String>,
     password: Option<String>,
+    message: Option<String>,
     error: Option<String>,
 }
 
@@ -104,6 +107,7 @@ fn handle_http_client(stream: TcpStream, app: Arc<Mutex<App>>) {
                                 ok: false,
                                 username: None,
                                 password: None,
+                                message: None,
                                 error: Some("App is locked".to_string()),
                             }
                         } else {
@@ -112,12 +116,14 @@ fn handle_http_client(stream: TcpStream, app: Arc<Mutex<App>>) {
                                     ok: true,
                                     username: Some(username),
                                     password: Some(password),
+                                    message: None,
                                     error: None,
                                 },
                                 None => HttpResponse {
                                     ok: false,
                                     username: None,
                                     password: None,
+                                    message: None,
                                     error: Some("No credentials found for domain".to_string()),
                                 },
                             }
@@ -127,7 +133,44 @@ fn handle_http_client(stream: TcpStream, app: Arc<Mutex<App>>) {
                             ok: false,
                             username: None,
                             password: None,
+                            message: None,
                             error: Some("Domain not specified".to_string()),
+                        }
+                    }
+                }
+                "set_credentials" => {
+                    if let (Some(domain), Some(username), Some(password)) =
+                        (request.domain, request.username, request.password)
+                    {
+                        let mut app = app.lock().unwrap();
+                        if !app.unlocked {
+                            HttpResponse {
+                                ok: false,
+                                username: None,
+                                password: None,
+                                message: None,
+                                error: Some("App is locked".to_string()),
+                            }
+                        } else {
+                            // Add or update credentials for the domain
+                            app.save_credentials_for_domain(&domain, &username, &password);
+                            HttpResponse {
+                                ok: true,
+                                username: None,
+                                password: None,
+                                message: None,
+                                error: None,
+                            }
+                        }
+                    } else {
+                        HttpResponse {
+                            ok: false,
+                            username: None,
+                            password: None,
+                            message: None,
+                            error: Some(
+                                "Domain, username, and password must be specified".to_string(),
+                            ),
                         }
                     }
                 }
@@ -138,6 +181,7 @@ fn handle_http_client(stream: TcpStream, app: Arc<Mutex<App>>) {
                             ok: true,
                             username: None,
                             password: None,
+                            message: None,
                             error: None,
                         }
                     } else {
@@ -145,6 +189,7 @@ fn handle_http_client(stream: TcpStream, app: Arc<Mutex<App>>) {
                             ok: false,
                             username: None,
                             password: None,
+                            message: None,
                             error: Some("App is locked".to_string()),
                         }
                     }
@@ -153,6 +198,7 @@ fn handle_http_client(stream: TcpStream, app: Arc<Mutex<App>>) {
                     ok: false,
                     username: None,
                     password: None,
+                    message: None,
                     error: Some("Unknown action".to_string()),
                 },
             },
@@ -160,6 +206,7 @@ fn handle_http_client(stream: TcpStream, app: Arc<Mutex<App>>) {
                 ok: false,
                 username: None,
                 password: None,
+                message: None,
                 error: Some(format!("Invalid JSON: {}", e)),
             },
         }
@@ -168,6 +215,7 @@ fn handle_http_client(stream: TcpStream, app: Arc<Mutex<App>>) {
             ok: false,
             username: None,
             password: None,
+            message: None,
             error: Some("Empty request".to_string()),
         }
     };

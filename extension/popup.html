@@ -1,100 +1,207 @@
-<!DOCTYPE html>
+<!DOCTYPE html><!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
+    <meta charset="UTF-8">
     <style>
-        body {
-            width: 300px;
-            padding: 15px;
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        * {
             margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        
-        h3 {
-            margin: 0 0 15px 0;
-            font-size: 16px;
-            font-weight: 600;
-            color: #0c0c0d;
+
+        body {
+            width: 380px;
+            min-height: 240px;
+            background: #1a1a1a;
+            font-family: 'Courier New', monospace;
+            color: #d0d0d0;
+            padding: 0;
+            position: relative;
+            border: 3px solid #2a2a2a;
+            box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.5);
         }
-        
+
+        /* CRT scanline effect */
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.08),
+                rgba(0, 0, 0, 0.08) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* Vignette */
+        body::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.4);
+            pointer-events: none;
+            z-index: 9;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            padding: 20px;
+        }
+
+        .header {
+            border: 2px solid #3a3a3a;
+            background: #1f1f1f;
+            padding: 12px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 0 #0a0a0a;
+        }
+
+        h1 {
+            font-size: 18px;
+            text-align: left;
+            margin-bottom: 4px;
+            color: #a0a0a0;
+            font-weight: normal;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+
+        .subtitle {
+            font-size: 10px;
+            color: #6a6a6a;
+            letter-spacing: 1px;
+        }
+
+        .window {
+            border: 2px solid #3a3a3a;
+            background: #1f1f1f;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 0 #0a0a0a;
+        }
+
+        .window-title {
+            background: #2a2a2a;
+            padding: 4px 8px;
+            font-size: 11px;
+            color: #808080;
+            border-bottom: 1px solid #3a3a3a;
+            letter-spacing: 1px;
+        }
+
+        .window-content {
+            padding: 12px;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            background: #5a5a5a;
+            border: 1px solid #3a3a3a;
+            flex-shrink: 0;
+        }
+
+        .status-indicator.active {
+            background: #909090;
+            box-shadow: 0 0 6px #808080;
+        }
+
+        .status-text {
+            color: #b0b0b0;
+            font-size: 11px;
+        }
+
         button {
             width: 100%;
             padding: 10px;
-            margin: 5px 0;
-            background: #0060df;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: background 0.2s;
-        }
-        
-        button:hover {
-            background: #003eaa;
-        }
-        
-        button:active {
-            background: #002275;
-        }
-        
-        #status {
-            margin-top: 10px;
-            padding: 10px;
-            border-radius: 4px;
-            font-size: 13px;
-            display: none;
-            animation: fadeIn 0.2s;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .success {
-            background: #e6f4ea;
-            color: #137333;
-            border: 1px solid #b7e1cd;
-        }
-        
-        .error {
-            background: #fce8e6;
-            color: #c5221f;
-            border: 1px solid #f4c7c3;
-        }
-        
-        .info {
-            margin-top: 15px;
-            padding: 10px;
-            background: #f0f0f4;
-            border-radius: 4px;
+            background: #2a2a2a;
+            color: #a0a0a0;
+            border: 2px solid #3a3a3a;
+            border-bottom: 3px solid #0a0a0a;
+            border-right: 3px solid #0a0a0a;
             font-size: 12px;
-            color: #5b5b66;
-            line-height: 1.5;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            transition: all 0.1s;
+            letter-spacing: 2px;
+            text-transform: uppercase;
         }
-        
-        .info strong {
-            color: #0c0c0d;
+
+        button:hover {
+            background: #353535;
+            color: #b0b0b0;
+            border-color: #4a4a4a;
+        }
+
+        button:active {
+            border-bottom: 2px solid #000000;
+            border-right: 2px solid #000000;
+            transform: translate(1px, 1px);
+        }
+
+        .footer {
+            border-top: 1px solid #3a3a3a;
+            padding: 8px 0 0 0;
+            margin-top: 12px;
+        }
+
+        .info {
+            font-size: 9px;
+            color: #6a6a6a;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+
+        /* Subtle flicker effect */
+        @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.98; }
+        }
+
+        .container {
+            animation: flicker 0.15s infinite;
         }
     </style>
 </head>
 <body>
-    <h3>🔐 Grimoire Password Manager</h3>
-    
-    <button id="ping">Test Connection</button>
-    <button id="fill">Fill Current Page</button>
-    
-    <div id="status"></div>
-    
-    <div class="info">
-        <strong>Make sure:</strong><br>
-        • Grimoire TUI is running<br>
-        • You're unlocked with master password<br>
-        • Secret exists for current domain
+    <div class="container">
+        <div class="header">
+            <h1>GRIMOIRE</h1>
+            <div class="subtitle">PASSWORD VAULT</div>
+        </div>
+        
+        <div class="window">
+            <div class="window-title">STATUS</div>
+            <div class="window-content">
+                <div class="status">
+                    <div id="statusIndicator" class="status-indicator"></div>
+                    <div id="statusText" class="status-text">Initializing...</div>
+                </div>
+            </div>
+        </div>
+        
+        <button id="testButton">
+            <span>[ TEST CONNECTION ]</span>
+        </button>
     </div>
-    
+
     <script src="popup.js"></script>
 </body>
 </html>

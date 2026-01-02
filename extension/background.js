@@ -31,6 +31,37 @@ async function getCredentials(domain) {
     }
 }
 
+// Send new credentials to Grimoire for a domain
+async function sendCredentials(domain, username, password) {
+    try {
+        const response = await fetch(GRIMOIRE_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                action: "set_credentials",
+                domain: domain,
+                username: username,
+                password: password
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.ok) {
+            return {
+                success: true,
+                message: data.message || "Credentials saved successfully"
+            };
+        } else {
+            throw new Error(data.error || "Unknown error");
+        }
+    } catch (error) {
+        throw new Error(`Could not connect to Grimoire: ${error.message}`);
+    }
+}
+
 // Ping to test connection
 async function ping() {
     try {
@@ -70,6 +101,23 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         
         return true; // Keep message channel open for async response
     }
+    if (message.action === "send_credentials") {
+    sendCredentials(message.domain, message.username, message.password)
+        .then(result => {
+            sendResponse({
+                success: true,
+                message: result.message
+            });
+        })
+        .catch(error => {
+            sendResponse({
+                success: false,
+                error: error.message
+            });
+        });
+    
+    return true; // Keep message channel open for async response
+}
     
     if (message.action === "ping") {
         ping()

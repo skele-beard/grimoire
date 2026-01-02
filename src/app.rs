@@ -284,6 +284,60 @@ impl App {
         None
     }
 
+    pub fn save_credentials_for_domain(&mut self, domain: &str, username: &str, password: &str) {
+        let normalized_domain = domain
+            .trim()
+            .to_lowercase()
+            .replace("https://", "")
+            .replace("http://", "")
+            .replace("www.", "")
+            .replace(".com", "")
+            .split('/')
+            .next()
+            .unwrap_or("")
+            .to_string();
+        for secret in &mut self.secrets {
+            let secret_name = secret.get_name().to_lowercase();
+
+            // Check if the secret name contains the domain
+            if secret_name.contains(&normalized_domain) {
+                let contents = secret.get_contents();
+
+                let mut current_username = None;
+                let mut current_password = None;
+
+                for pair in contents {
+                    let key_lower = pair.key.to_lowercase();
+                    if key_lower == "username" || key_lower == "user" || key_lower == "email" {
+                        current_username = Some(pair.value.clone());
+                    } else if key_lower == "password" || key_lower == "pass" {
+                        current_password = Some(pair.value.clone());
+                    }
+                }
+                if current_username.as_deref() == Some(username)
+                    && current_password.as_deref() == Some(password)
+                {
+                    return;
+                } else {
+                    // This is the situation where the secret needs to be updated. I'm going to
+                    // wait until the program is smart enough to detect "successful" logins before
+                    // implementing
+                }
+            }
+        }
+        let user_pair = Pair {
+            key: String::from("username"),
+            value: String::from(username),
+        };
+        let password_pair = Pair {
+            key: String::from("password"),
+            value: String::from(password),
+        };
+        let secret = Secret::new(domain, vec![user_pair, password_pair]);
+        self.secrets.push(secret);
+        self.write_secrets_to_disk();
+    }
+
     pub fn search_secrets(&mut self) {
         let input = &self.scratch;
         self.search_buffer = self

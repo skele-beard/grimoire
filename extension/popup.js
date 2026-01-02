@@ -1,20 +1,19 @@
 // popup.js - Handles the popup UI interactions
+const statusIndicator = document.getElementById('statusIndicator');
+const statusText = document.getElementById('statusText');
 
-const statusDiv = document.getElementById('status');
-
-function showStatus(message, isError = false) {
-    statusDiv.textContent = message;
-    statusDiv.className = isError ? 'error' : 'success';
-    statusDiv.style.display = 'block';
+function showStatus(message, isActive = false) {
+    statusText.textContent = message;
+    if (isActive) {
+        statusIndicator.classList.add('active');
+    } else {
+        statusIndicator.classList.remove('active');
+    }
 }
 
-function hideStatus() {
-    statusDiv.style.display = 'none';
-}
-
-// Test connection button
-document.getElementById('ping').addEventListener('click', async () => {
-    showStatus('Testing connection...');
+// Test connection on load
+async function checkConnection() {
+    showStatus('CHECKING CONNECTION...');
     
     try {
         const response = await browser.runtime.sendMessage({
@@ -22,77 +21,34 @@ document.getElementById('ping').addEventListener('click', async () => {
         });
         
         if (response.success) {
-            showStatus('✓ ' + response.message);
+            showStatus('CONNECTED', true);
         } else {
-            showStatus('✗ ' + response.error, true);
+            showStatus('DISCONNECTED');
         }
     } catch (error) {
-        showStatus('✗ Error: ' + error.message, true);
+        showStatus('DISCONNECTED');
     }
-});
+}
 
-// Fill current page button
-document.getElementById('fill').addEventListener('click', async () => {
-    showStatus('Getting credentials...');
+// Test connection button
+document.getElementById('testButton').addEventListener('click', async () => {
+    showStatus('TESTING...');
     
     try {
-        // Get current tab
-        const tabs = await browser.tabs.query({active: true, currentWindow: true});
-        const tab = tabs[0];
-        
-        if (!tab.url || !tab.url.startsWith('http')) {
-            showStatus('✗ Cannot fill credentials on this page', true);
-            return;
-        }
-        
-        const url = new URL(tab.url);
-        const domain = url.hostname;
-        
-        // Request credentials
         const response = await browser.runtime.sendMessage({
-            action: "get_credentials",
-            domain: domain
+            action: "ping"
         });
         
         if (response.success) {
-            // Inject content script if needed, then send message
-            try {
-                // Try to send message first
-                await browser.tabs.sendMessage(tab.id, {
-                    action: "autofill",
-                    credentials: response.credentials
-                });
-                
-                showStatus(`✓ Filled credentials for ${domain}`);
-            } catch (error) {
-                // Content script might not be loaded, try injecting it
-                try {
-                    await browser.tabs.executeScript(tab.id, {
-                        file: "content.js"
-                    });
-                    
-                    // Wait a moment for script to initialize
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    
-                    // Try again
-                    await browser.tabs.sendMessage(tab.id, {
-                        action: "autofill",
-                        credentials: response.credentials
-                    });
-                    
-                    showStatus(`✓ Filled credentials for ${domain}`);
-                } catch (injectError) {
-                    console.error('Injection error:', injectError);
-                    showStatus('✗ Could not fill credentials: ' + injectError.message, true);
-                }
-            }
+            showStatus('CONNECTION OK', true);
+            setTimeout(() => checkConnection(), 2000);
         } else {
-            showStatus('✗ ' + response.error, true);
+            showStatus('CONNECTION FAILED');
         }
     } catch (error) {
-        showStatus('✗ Error: ' + error.message, true);
+        showStatus('ERROR: ' + error.message.toUpperCase());
     }
 });
 
-// Clear status when popup opens
-hideStatus();
+// Check connection on popup open
+checkConnection();ideStatus();

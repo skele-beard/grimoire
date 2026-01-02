@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Grimoire Password Manager",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Password autofill from Grimoire TUI password manager",
   
   "permissions": [

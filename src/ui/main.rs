@@ -113,7 +113,9 @@ pub fn render_secret_card(frame: &mut Frame, app: &App, secret: &Secret, idx: us
 
 pub fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
     let hint = match app.current_screen {
-        CurrentScreen::Main => "(q) to quit / (n) to make new secret / (/) to search",
+        CurrentScreen::Main => {
+            "(q) to quit / (n) to make new secret / (/) to search / (x) to delete"
+        }
         CurrentScreen::Searching => &format!(
             "{} - (Tab) to find next match / (ESC) to cancel",
             &app.scratch
