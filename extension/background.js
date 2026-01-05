@@ -1,30 +1,21 @@
-// background.js - Handles communication with Grimoire HTTP server
-
-const GRIMOIRE_URL = "http://127.0.0.1:47777";
-
 // Request credentials for a domain
 async function getCredentials(domain) {
     try {
-        const response = await fetch(GRIMOIRE_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
+        const response = await browser.runtime.sendNativeMessage(
+            "com.grimoire.native",
+            {
                 action: "get_credentials",
                 domain: domain
-            })
-        });
+            }
+        );
         
-        const data = await response.json();
-        
-        if (data.ok) {
+        if (response.ok) {
             return {
-                username: data.username,
-                password: data.password
+                username: response.username,
+                password: response.password
             };
         } else {
-            throw new Error(data.error || "Unknown error");
+            throw new Error(response.error || "Unknown error");
         }
     } catch (error) {
         throw new Error(`Could not connect to Grimoire: ${error.message}`);
@@ -34,28 +25,23 @@ async function getCredentials(domain) {
 // Send new credentials to Grimoire for a domain
 async function sendCredentials(domain, username, password) {
     try {
-        const response = await fetch(GRIMOIRE_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
+        const response = await browser.runtime.sendNativeMessage(
+            "com.grimoire.native",
+            {
                 action: "set_credentials",
                 domain: domain,
                 username: username,
                 password: password
-            })
-        });
+            }
+        );
         
-        const data = await response.json();
-        
-        if (data.ok) {
+        if (response.ok) {
             return {
                 success: true,
-                message: data.message || "Credentials saved successfully"
+                message: response.message || "Credentials saved successfully"
             };
         } else {
-            throw new Error(data.error || "Unknown error");
+            throw new Error(response.error || "Unknown error");
         }
     } catch (error) {
         throw new Error(`Could not connect to Grimoire: ${error.message}`);
@@ -65,18 +51,13 @@ async function sendCredentials(domain, username, password) {
 // Ping to test connection
 async function ping() {
     try {
-        const response = await fetch(GRIMOIRE_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
+        const response = await browser.runtime.sendNativeMessage(
+            "com.grimoire.native",
+            {
                 action: "ping"
-            })
-        });
-        
-        const data = await response.json();
-        return data.ok;
+            }
+        );
+        return response.ok;
     } catch (error) {
         return false;
     }
@@ -99,25 +80,26 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 });
             });
         
-        return true; // Keep message channel open for async response
+        return true;
     }
-    if (message.action === "send_credentials") {
-    sendCredentials(message.domain, message.username, message.password)
-        .then(result => {
-            sendResponse({
-                success: true,
-                message: result.message
-            });
-        })
-        .catch(error => {
-            sendResponse({
-                success: false,
-                error: error.message
-            });
-        });
     
-    return true; // Keep message channel open for async response
-}
+    if (message.action === "send_credentials") {
+        sendCredentials(message.domain, message.username, message.password)
+            .then(result => {
+                sendResponse({
+                    success: true,
+                    message: result.message
+                });
+            })
+            .catch(error => {
+                sendResponse({
+                    success: false,
+                    error: error.message
+                });
+            });
+        
+        return true;
+    }
     
     if (message.action === "ping") {
         ping()
@@ -141,7 +123,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 });
             });
         
-        return true; // Keep message channel open for async response
+        return true;
     }
 });
 
