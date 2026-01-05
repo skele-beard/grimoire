@@ -1,10 +1,12 @@
 mod app;
+mod ipc;
 mod secret;
 mod ui;
 
 use app::{App, CurrentScreen, CurrentlyEditing};
 use cli_clipboard::ClipboardProvider;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use ipc::{IpcRequest, IpcResponse};
 use ratatui::backend::Backend;
 use ratatui::crossterm::event::DisableMouseCapture;
 use ratatui::crossterm::event::EnableMouseCapture;
@@ -12,245 +14,240 @@ use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
 use ratatui::crossterm::terminal::{LeaveAlternateScreen, disable_raw_mode};
 use ratatui::{Terminal, backend::CrosstermBackend};
-use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::io::Read;
-use std::io::{self, BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream};
+use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use ui::ui;
 
-#[derive(Deserialize)]
-struct HttpRequest {
-    action: String,
-    domain: Option<String>,
-    username: Option<String>,
-    password: Option<String>,
-}
+#[cfg(unix)]
+fn start_ipc_server(app: Arc<Mutex<App>>) -> thread::JoinHandle<()> {
+    use std::os::unix::net::UnixListener;
 
-#[derive(Serialize)]
-struct HttpResponse {
-    ok: bool,
-    username: Option<String>,
-    password: Option<String>,
-    message: Option<String>,
-    error: Option<String>,
-}
-
-fn send_http_response(mut stream: TcpStream, status: &str, body: String) {
-    let response = format!(
-        "HTTP/1.1 {}\r\n\
-         Content-Type: application/json\r\n\
-         Access-Control-Allow-Origin: *\r\n\
-         Access-Control-Allow-Methods: POST, OPTIONS\r\n\
-         Access-Control-Allow-Headers: Content-Type\r\n\
-         Content-Length: {}\r\n\
-         \r\n\
-         {}",
-        status,
-        body.len(),
-        body
-    );
-    let _ = stream.write_all(response.as_bytes());
-}
-
-fn handle_http_client(stream: TcpStream, app: Arc<Mutex<App>>) {
-    let mut reader = BufReader::new(stream.try_clone().expect("Failed to clone stream"));
-    let mut request_line = String::new();
-
-    // Read the request line
-    if reader.read_line(&mut request_line).is_err() {
-        return;
-    }
-
-    // Read headers to find content length
-    let mut headers = Vec::new();
-    let mut content_length = 0;
-    loop {
-        let mut line = String::new();
-        if reader.read_line(&mut line).is_err() {
-            return;
-        }
-        if line == "\r\n" || line == "\n" {
-            break;
-        }
-        if line.to_lowercase().starts_with("content-length:") {
-            if let Some(len_str) = line.split(':').nth(1) {
-                content_length = len_str.trim().parse().unwrap_or(0);
-            }
-        }
-        headers.push(line);
-    }
-
-    // Handle OPTIONS request (CORS preflight)
-    if request_line.starts_with("OPTIONS") {
-        send_http_response(stream, "200 OK", String::new());
-        return;
-    }
-
-    // Read body if present
-    let mut body = vec![0u8; content_length];
-    if reader.read_exact(&mut body).is_err() {
-        return;
-    }
-
-    // Parse JSON request
-    let response = if content_length > 0 {
-        match serde_json::from_slice::<HttpRequest>(&body) {
-            Ok(request) => match request.action.as_str() {
-                "get_credentials" => {
-                    if let Some(domain) = request.domain {
-                        let app = app.lock().unwrap();
-                        if !app.unlocked {
-                            HttpResponse {
-                                ok: false,
-                                username: None,
-                                password: None,
-                                message: None,
-                                error: Some("App is locked".to_string()),
-                            }
-                        } else {
-                            match app.get_credentials_for_domain(&domain) {
-                                Some((username, password)) => HttpResponse {
-                                    ok: true,
-                                    username: Some(username),
-                                    password: Some(password),
-                                    message: None,
-                                    error: None,
-                                },
-                                None => HttpResponse {
-                                    ok: false,
-                                    username: None,
-                                    password: None,
-                                    message: None,
-                                    error: Some("No credentials found for domain".to_string()),
-                                },
-                            }
-                        }
-                    } else {
-                        HttpResponse {
-                            ok: false,
-                            username: None,
-                            password: None,
-                            message: None,
-                            error: Some("Domain not specified".to_string()),
-                        }
-                    }
-                }
-                "set_credentials" => {
-                    if let (Some(domain), Some(username), Some(password)) =
-                        (request.domain, request.username, request.password)
-                    {
-                        let mut app = app.lock().unwrap();
-                        if !app.unlocked {
-                            HttpResponse {
-                                ok: false,
-                                username: None,
-                                password: None,
-                                message: None,
-                                error: Some("App is locked".to_string()),
-                            }
-                        } else {
-                            // Add or update credentials for the domain
-                            app.save_credentials_for_domain(&domain, &username, &password);
-                            HttpResponse {
-                                ok: true,
-                                username: None,
-                                password: None,
-                                message: None,
-                                error: None,
-                            }
-                        }
-                    } else {
-                        HttpResponse {
-                            ok: false,
-                            username: None,
-                            password: None,
-                            message: None,
-                            error: Some(
-                                "Domain, username, and password must be specified".to_string(),
-                            ),
-                        }
-                    }
-                }
-                "ping" => {
-                    let app = app.lock().unwrap();
-                    if app.unlocked {
-                        HttpResponse {
-                            ok: true,
-                            username: None,
-                            password: None,
-                            message: None,
-                            error: None,
-                        }
-                    } else {
-                        HttpResponse {
-                            ok: false,
-                            username: None,
-                            password: None,
-                            message: None,
-                            error: Some("App is locked".to_string()),
-                        }
-                    }
-                }
-                _ => HttpResponse {
-                    ok: false,
-                    username: None,
-                    password: None,
-                    message: None,
-                    error: Some("Unknown action".to_string()),
-                },
-            },
-            Err(e) => HttpResponse {
-                ok: false,
-                username: None,
-                password: None,
-                message: None,
-                error: Some(format!("Invalid JSON: {}", e)),
-            },
-        }
-    } else {
-        HttpResponse {
-            ok: false,
-            username: None,
-            password: None,
-            message: None,
-            error: Some("Empty request".to_string()),
-        }
-    };
-
-    let response_json = serde_json::to_string(&response).unwrap();
-    send_http_response(stream, "200 OK", response_json);
-}
-
-fn start_http_server(app: Arc<Mutex<App>>) -> thread::JoinHandle<()> {
     thread::spawn(move || {
-        let addr = "127.0.0.1:47777";
+        let socket_path = ipc::get_socket_path();
 
-        let listener = match TcpListener::bind(addr) {
+        // Remove existing socket file
+        let _ = std::fs::remove_file(&socket_path);
+
+        let listener = match UnixListener::bind(&socket_path) {
             Ok(listener) => listener,
             Err(e) => {
-                eprintln!("Failed to bind to {}: {}", addr, e);
-                eprintln!("Make sure port 47777 is not already in use");
+                eprintln!("Failed to bind Unix socket: {}", e);
                 return;
             }
         };
+
+        eprintln!("IPC server listening on {}", socket_path);
 
         for stream in listener.incoming() {
             match stream {
                 Ok(stream) => {
                     let app_clone = Arc::clone(&app);
                     thread::spawn(move || {
-                        handle_http_client(stream, app_clone);
+                        handle_ipc_client(stream, app_clone);
                     });
                 }
                 Err(e) => {
-                    eprintln!("Connection error: {}", e);
+                    eprintln!("IPC connection error: {}", e);
                 }
             }
         }
     })
+}
+
+#[cfg(windows)]
+fn start_ipc_server(app: Arc<Mutex<App>>) -> thread::JoinHandle<()> {
+    use std::fs::File;
+    use std::os::windows::io::FromRawHandle;
+    use winapi::um::handleapi::INVALID_HANDLE_VALUE;
+    use winapi::um::winbase::{CreateNamedPipeA, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE, PIPE_WAIT};
+
+    thread::spawn(move || {
+        let pipe_name = ipc::get_pipe_name();
+        eprintln!("IPC server listening on {}", pipe_name);
+
+        loop {
+            unsafe {
+                let pipe_name_cstr = std::ffi::CString::new(pipe_name.clone()).unwrap();
+                let handle = CreateNamedPipeA(
+                    pipe_name_cstr.as_ptr(),
+                    PIPE_ACCESS_DUPLEX,
+                    PIPE_TYPE_BYTE | PIPE_WAIT,
+                    255,
+                    4096,
+                    4096,
+                    0,
+                    std::ptr::null_mut(),
+                );
+
+                if handle == INVALID_HANDLE_VALUE {
+                    eprintln!("Failed to create named pipe");
+                    return;
+                }
+
+                let stream = File::from_raw_handle(handle as *mut _);
+
+                let app_clone = Arc::clone(&app);
+                thread::spawn(move || {
+                    handle_ipc_client(stream, app_clone);
+                });
+            }
+        }
+    })
+}
+
+#[cfg(unix)]
+fn handle_ipc_client(mut stream: std::os::unix::net::UnixStream, app: Arc<Mutex<App>>) {
+    handle_ipc_request(&mut stream, app);
+}
+
+#[cfg(windows)]
+fn handle_ipc_client(mut stream: std::fs::File, app: Arc<Mutex<App>>) {
+    handle_ipc_request(&mut stream, app);
+}
+
+fn handle_ipc_request<S: Read + Write>(stream: &mut S, app: Arc<Mutex<App>>) {
+    let mut buffer = Vec::new();
+    let mut temp = [0u8; 1024];
+
+    loop {
+        match stream.read(&mut temp) {
+            Ok(0) => break,
+            Ok(n) => {
+                buffer.extend_from_slice(&temp[..n]);
+                if buffer.ends_with(&[b'\n']) {
+                    break;
+                }
+            }
+            Err(_) => return,
+        }
+    }
+
+    if buffer.ends_with(&[b'\n']) {
+        buffer.pop();
+    }
+
+    let response = match serde_json::from_slice::<IpcRequest>(&buffer) {
+        Ok(request) => process_request(request, app),
+        Err(e) => IpcResponse {
+            ok: false,
+            username: None,
+            password: None,
+            message: None,
+            error: Some(format!("Invalid JSON: {}", e)),
+        },
+    };
+
+    let response_json = serde_json::to_string(&response).unwrap();
+    let _ = stream.write_all(response_json.as_bytes());
+    let _ = stream.write_all(b"\n");
+    let _ = stream.flush();
+}
+
+fn process_request(request: IpcRequest, app: Arc<Mutex<App>>) -> IpcResponse {
+    match request.action.as_str() {
+        "get_credentials" => {
+            if let Some(domain) = request.domain {
+                let app = app.lock().unwrap();
+                if !app.unlocked {
+                    IpcResponse {
+                        ok: false,
+                        username: None,
+                        password: None,
+                        message: None,
+                        error: Some("App is locked".to_string()),
+                    }
+                } else {
+                    match app.get_credentials_for_domain(&domain) {
+                        Some((username, password)) => IpcResponse {
+                            ok: true,
+                            username: Some(username),
+                            password: Some(password),
+                            message: None,
+                            error: None,
+                        },
+                        None => IpcResponse {
+                            ok: false,
+                            username: None,
+                            password: None,
+                            message: None,
+                            error: Some("No credentials found for domain".to_string()),
+                        },
+                    }
+                }
+            } else {
+                IpcResponse {
+                    ok: false,
+                    username: None,
+                    password: None,
+                    message: None,
+                    error: Some("Domain not specified".to_string()),
+                }
+            }
+        }
+        "set_credentials" => {
+            if let (Some(domain), Some(username), Some(password)) =
+                (request.domain, request.username, request.password)
+            {
+                let mut app = app.lock().unwrap();
+                if !app.unlocked {
+                    IpcResponse {
+                        ok: false,
+                        username: None,
+                        password: None,
+                        message: None,
+                        error: Some("App is locked".to_string()),
+                    }
+                } else {
+                    app.save_credentials_for_domain(&domain, &username, &password);
+                    IpcResponse {
+                        ok: true,
+                        username: None,
+                        password: None,
+                        message: Some("Credentials saved".to_string()),
+                        error: None,
+                    }
+                }
+            } else {
+                IpcResponse {
+                    ok: false,
+                    username: None,
+                    password: None,
+                    message: None,
+                    error: Some("Domain, username, and password must be specified".to_string()),
+                }
+            }
+        }
+        "ping" => {
+            let app = app.lock().unwrap();
+            if app.unlocked {
+                IpcResponse {
+                    ok: true,
+                    username: None,
+                    password: None,
+                    message: Some("pong".to_string()),
+                    error: None,
+                }
+            } else {
+                IpcResponse {
+                    ok: false,
+                    username: None,
+                    password: None,
+                    message: None,
+                    error: Some("App is locked".to_string()),
+                }
+            }
+        }
+        _ => IpcResponse {
+            ok: false,
+            username: None,
+            password: None,
+            message: None,
+            error: Some("Unknown action".to_string()),
+        },
+    }
 }
 
 #[allow(clippy::single_match)]
@@ -656,11 +653,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // create app and run it
     let app = Arc::new(Mutex::new(App::new()));
 
-    // Start HTTP server in background thread
-    let _http_handle = start_http_server(Arc::clone(&app));
+    // Start IPC server (NEW)
+    let _ipc_handle = start_ipc_server(Arc::clone(&app));
 
     let _res = run_app(&mut terminal, Arc::clone(&app));
 
@@ -672,6 +668,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         DisableMouseCapture
     )?;
     terminal.show_cursor()?;
+
+    // Clean up socket file on Unix
+    #[cfg(unix)]
+    {
+        let _ = std::fs::remove_file(ipc::get_socket_path());
+    }
 
     Ok(())
 }

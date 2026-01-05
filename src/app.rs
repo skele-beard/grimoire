@@ -344,7 +344,7 @@ impl App {
             .secrets
             .iter()
             .enumerate()
-            .filter(|(_, secret)| secret.get_name().contains(input)) // if get_name() is a method, use secret.get_name().contains(input)
+            .filter(|(_, secret)| secret.get_name().contains(input))
             .map(|(i, _)| i)
             .collect();
         if !self.search_buffer.is_empty() {
