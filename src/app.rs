@@ -1,3 +1,4 @@
+use crate::config;
 use crate::secret;
 
 use argon2::{
@@ -5,63 +6,14 @@ use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
 };
 use cli_clipboard::{ClipboardContext, ClipboardProvider};
+use config::Config;
 use crossterm::event::KeyCode;
-use dirs::config_dir;
 use rand::distr::{Distribution, Uniform};
 use rand::prelude::*;
 use rand_argon_compatible::rngs::OsRng as OsRng08;
 use secret::{EncryptedSecret, Pair, Secret};
-use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fs;
-use std::path::PathBuf;
-
-#[derive(Deserialize, Serialize)]
-pub struct Config {
-    master_password_file: PathBuf,
-    password_store: PathBuf,
-    pub secrets_per_row: usize,
-    pub password_generator_length: u8,
-    pub password_generator_symbols_flag: bool,
-}
-
-impl Config {
-    fn load() -> Self {
-        let config_path = config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("grimoire/config.toml");
-
-        let content = match fs::read_to_string(&config_path) {
-            Ok(s) if !s.trim().is_empty() => s,
-            Ok(_) | Err(_) => {
-                eprintln!("Error reading config, using defaults");
-                String::new()
-            }
-        };
-
-        if !content.trim().is_empty() {
-            if let Ok(cfg) = toml::from_str(&content) {
-                return cfg;
-            } else {
-                eprintln!("Invalid config format, using defaults");
-            }
-        }
-
-        // if we reach this point, we need to create the config file and use defaults
-        let base_dir = config_dir().unwrap_or_else(|| PathBuf::from("."));
-        let config = Self {
-            master_password_file: base_dir.join("grimoire/password_store/master_password"),
-            password_store: base_dir.join("grimoire/password_store.json"),
-            secrets_per_row: 3,
-            password_generator_length: 16,
-            password_generator_symbols_flag: true,
-        };
-
-        let config_string = toml::to_string(&config).unwrap();
-        let _ = fs::write(config_path, config_string);
-        config
-    }
-}
 
 pub enum CurrentScreen {
     Main,
@@ -167,7 +119,7 @@ impl App {
     }
 
     pub fn generate_password(&self) -> String {
-        let symbols = self.config.password_generator_symbols_flag;
+        let symbols = self.config.password_generator_symbols;
         let length = self.config.password_generator_length;
         let distr = Uniform::try_from(33..127).unwrap();
         let mut rng = rand::rng();
@@ -554,5 +506,32 @@ impl App {
         };
 
         self.currently_editing = Some(next);
+    }
+
+    fn save_secret_from_values(&mut self, name: &str, contents: Vec<Pair>) {
+        if !&self.name_input.is_empty() {
+            let secret = Secret::new(name, contents.clone());
+            self.secrets.push(secret);
+            self.write_secrets_to_disk();
+        }
+    }
+
+    fn delete_secret_by_idx(&mut self, idx: usize) {
+        let _ = self.secrets.remove(idx);
+        self.write_secrets_to_disk();
+    }
+
+    fn load_secret_by_idx(&mut self, idx: usize) {
+        if let Some(secret) = self.secrets.get(idx) {
+            self.name_input = String::from(secret.get_name());
+            self.secret_scratch_content = secret.get_contents();
+        }
+    }
+
+    fn update_secret_by_idx(&mut self, idx: usize, name: &str, contents: Vec<Pair>) {
+        //Delete secret
+        self.delete_secret_by_idx(idx);
+        //Resave with new values
+        self.save_secret_from_values(name, contents);
     }
 }

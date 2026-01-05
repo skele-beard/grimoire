@@ -1,12 +1,9 @@
-mod app;
-mod ipc;
-mod secret;
-mod ui;
-
-use app::{App, CurrentScreen, CurrentlyEditing};
 use cli_clipboard::ClipboardProvider;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
-use ipc::{IpcRequest, IpcResponse};
+use grimoire::app::{App, CurrentScreen, CurrentlyEditing};
+use grimoire::ipc;
+use grimoire::ipc::{IpcRequest, IpcResponse};
+use grimoire::ui::ui;
 use ratatui::backend::Backend;
 use ratatui::crossterm::event::DisableMouseCapture;
 use ratatui::crossterm::event::EnableMouseCapture;
@@ -19,7 +16,6 @@ use std::io::Read;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use ui::ui;
 
 #[cfg(unix)]
 fn start_ipc_server(app: Arc<Mutex<App>>) -> thread::JoinHandle<()> {
