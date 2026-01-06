@@ -337,11 +337,9 @@ impl App {
     }
 
     pub fn save_secret(&mut self) {
-        if !&self.name_input.is_empty() {
-            let secret = Secret::new(&self.name_input, self.secret_scratch_content.clone());
-            self.secrets.push(secret);
-            self.write_secrets_to_disk();
-        }
+        let name = self.name_input.clone();
+        let contents = self.secret_scratch_content.clone();
+        self.save_secret_from_values(&name, contents);
     }
 
     pub fn write_secrets_to_disk(&mut self) {
@@ -357,7 +355,7 @@ impl App {
     pub fn delete_secret(&mut self) {
         match self.currently_selected_secret_idx {
             Some(current_idx) => {
-                let _ = self.secrets.remove(current_idx);
+                self.delete_secret_by_idx(current_idx);
                 self.write_secrets_to_disk();
             }
             None => (),
@@ -367,10 +365,7 @@ impl App {
     pub fn load_secret(&mut self) {
         match self.currently_selected_secret_idx {
             Some(current_idx) => {
-                if let Some(secret) = self.secrets.get(current_idx) {
-                    self.name_input = String::from(secret.get_name());
-                    self.secret_scratch_content = secret.get_contents();
-                }
+                self.load_secret_by_idx(current_idx);
             }
             _ => (),
         }
