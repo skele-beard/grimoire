@@ -35,8 +35,6 @@ fn start_ipc_server(app: Arc<Mutex<App>>) -> thread::JoinHandle<()> {
             }
         };
 
-        eprintln!("IPC server listening on {}", socket_path);
-
         for stream in listener.incoming() {
             match stream {
                 Ok(stream) => {
