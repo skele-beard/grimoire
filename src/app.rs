@@ -248,17 +248,26 @@ impl App {
             .next()
             .unwrap_or("")
             .to_string();
-        for secret in &mut self.secrets {
+
+        let user_pair = Pair {
+            key: String::from("username"),
+            value: String::from(username),
+        };
+        let password_pair = Pair {
+            key: String::from("password"),
+            value: String::from(password),
+        };
+        for (idx, secret) in &mut self.secrets.iter().enumerate() {
             let secret_name = secret.get_name().to_lowercase();
 
             // Check if the secret name contains the domain
             if secret_name.contains(&normalized_domain) {
-                let contents = secret.get_contents();
+                let mut contents = secret.get_contents();
 
                 let mut current_username = None;
                 let mut current_password = None;
 
-                for pair in contents {
+                for pair in &contents {
                     let key_lower = pair.key.to_lowercase();
                     if key_lower == "username" || key_lower == "user" || key_lower == "email" {
                         current_username = Some(pair.value.clone());
@@ -271,20 +280,23 @@ impl App {
                 {
                     return;
                 } else {
-                    // This is the situation where the secret needs to be updated. I'm going to
-                    // wait until the program is smart enough to detect "successful" logins before
-                    // implementing
+                    // This is the situation where the secret needs to be updated.
+                    // Remove old username/password entries
+                    contents.retain(|pair| {
+                        let key_lower = pair.key.to_lowercase();
+                        !matches!(
+                            key_lower.as_str(),
+                            "username" | "user" | "email" | "password" | "pass"
+                        )
+                    });
+                    contents.push(user_pair.clone());
+                    contents.push(password_pair.clone());
+                    self.update_secret_by_idx(idx, &secret_name, contents);
+                    return;
                 }
             }
         }
-        let user_pair = Pair {
-            key: String::from("username"),
-            value: String::from(username),
-        };
-        let password_pair = Pair {
-            key: String::from("password"),
-            value: String::from(password),
-        };
+
         let secret = Secret::new(domain, vec![user_pair, password_pair]);
         self.secrets.push(secret);
         self.write_secrets_to_disk();
@@ -337,9 +349,11 @@ impl App {
     }
 
     pub fn save_secret(&mut self) {
-        let name = self.name_input.clone();
-        let contents = self.secret_scratch_content.clone();
-        self.save_secret_from_values(&name, contents);
+        if !self.name_input.is_empty() {
+            let name = self.name_input.clone();
+            let contents = self.secret_scratch_content.clone();
+            self.save_secret_from_values(&name, contents);
+        }
     }
 
     pub fn write_secrets_to_disk(&mut self) {
@@ -504,11 +518,9 @@ impl App {
     }
 
     fn save_secret_from_values(&mut self, name: &str, contents: Vec<Pair>) {
-        if !&self.name_input.is_empty() {
-            let secret = Secret::new(name, contents.clone());
-            self.secrets.push(secret);
-            self.write_secrets_to_disk();
-        }
+        let secret = Secret::new(name, contents.clone());
+        self.secrets.push(secret);
+        self.write_secrets_to_disk();
     }
 
     fn delete_secret_by_idx(&mut self, idx: usize) {
