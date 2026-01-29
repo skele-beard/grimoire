@@ -40,10 +40,6 @@ cargo build --release
 
 - cargo
 
-## License
-
-[GPL]
-
 ## Disclaimer
 
 While Grimoire implements strong security measures, this is ultimately a hobbyist project. Use at your own discretion.
