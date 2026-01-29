@@ -12,7 +12,7 @@ Grimoire is a password management solution designed to help you securely store a
 
 ## Features
 
-- **Secure Encryption**: All passwords are encrypted using AES256, a trusted and standard scheme.
+- **Secure Encryption**: All passwords are encrypted using AES-256-GCM, a trusted and standard scheme.
 - **Master Password**: Single master password to access all your stored credentials
 - **Password Generation**: Built-in strong password generator for creating secure passwords
 - **Cross-Platform**: Works seamlessly across different devices and operating systems
