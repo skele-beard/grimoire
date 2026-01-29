@@ -36,7 +36,7 @@ cargo build --release
 
 ## Security
 
-- Master password is never stored - only a secure hash is kept
+- Master password is never stored - only a secure hash (Argon2id) is kept
 - All password data is encrypted at rest
 - No telemetry or data collection
 
