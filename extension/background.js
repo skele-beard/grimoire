@@ -1,302 +1,257 @@
-// background.js - Uses content script startup to detect successful logins
+// background.js - Credential lifecycle management for Grimoire
 
-// Store pending credentials (survives page reloads)
+// Firefox compatibility
+if (typeof browser === 'undefined') {
+    var browser = chrome;
+}
+
+// Pending credentials waiting for login-success confirmation (keyed by tabId)
 let pendingCredentials = new Map();
 
-// Store recently sent credentials to avoid duplicates
+// Pending usernames for multi-step flows like Google/Microsoft (keyed by tabId)
+let pendingUsernames = new Map();
+
+// Dedup guard: avoid re-prompting for credentials saved in the last 5 minutes
 let recentlySent = new Map();
 
-function shouldSendCredentials(domain, username) {
+function shouldPrompt(domain, username) {
     const key = `${domain}:${username}`;
-    const lastSent = recentlySent.get(key);
-    
-    // Don't resend if we sent these credentials in the last 5 minutes
-    if (lastSent && Date.now() - lastSent < 300000) {
-        console.log('Grimoire: Skipping duplicate send for', domain, username);
-        return false;
-    }
-    
-    return true;
+    const last = recentlySent.get(key);
+    return !(last && Date.now() - last < 300000);
 }
 
-function markCredentialsAsSent(domain, username) {
+function markAsSent(domain, username) {
     const key = `${domain}:${username}`;
     recentlySent.set(key, Date.now());
-    
-    // Clean up old entries after 10 minutes
-    setTimeout(() => {
-        recentlySent.delete(key);
-    }, 600000);
+    setTimeout(() => recentlySent.delete(key), 600000);
 }
 
-// Request credentials for a domain
+// ===== NATIVE MESSAGING HELPERS =====
+
 async function getCredentials(domain) {
-    try {
-        const response = await browser.runtime.sendNativeMessage(
-            "com.grimoire.native",
-            {
-                action: "get_credentials",
-                domain: domain
-            }
-        );
-        
-        if (response.ok) {
-            return {
-                username: response.username,
-                password: response.password
-            };
-        } else {
-            throw new Error(response.error || "Unknown error");
-        }
-    } catch (error) {
-        throw new Error(`Could not connect to Grimoire: ${error.message}`);
+    const response = await browser.runtime.sendNativeMessage(
+        'com.grimoire.native',
+        { action: 'get_credentials', domain: domain }
+    );
+    if (response.ok && response.username) {
+        return { username: response.username, password: response.password };
     }
+    throw new Error(response.error || 'No credentials found');
 }
 
-// Send new credentials to Grimoire for a domain
-async function sendCredentials(domain, username, password) {
-    try {
-        const response = await browser.runtime.sendNativeMessage(
-            "com.grimoire.native",
-            {
-                action: "set_credentials",
-                domain: domain,
-                username: username,
-                password: password
-            }
-        );
-        
-        if (response.ok) {
-            return {
-                success: true,
-                message: response.message || "Credentials saved successfully"
-            };
-        } else {
-            throw new Error(response.error || "Unknown error");
-        }
-    } catch (error) {
-        throw new Error(`Could not connect to Grimoire: ${error.message}`);
-    }
+async function saveCredentials(domain, username, password) {
+    const response = await browser.runtime.sendNativeMessage(
+        'com.grimoire.native',
+        { action: 'set_credentials', domain: domain, username: username, password: password }
+    );
+    if (response.ok) return true;
+    throw new Error(response.error || 'Failed to save credentials');
 }
 
-// Ping to test connection
 async function ping() {
     try {
         const response = await browser.runtime.sendNativeMessage(
-            "com.grimoire.native",
-            {
-                action: "ping"
-            }
+            'com.grimoire.native',
+            { action: 'ping' }
         );
-        return response.ok;
-    } catch (error) {
+        return !!response.ok;
+    } catch (e) {
         return false;
     }
 }
 
-// Listen for messages from popup or content scripts
+// ===== CORE LOGIC =====
+
+// Compare submitted credentials against stored ones, then send the right prompt.
+async function evaluateAndPrompt(tabId, domain, username, password) {
+    if (!shouldPrompt(domain, username)) {
+        console.log('Grimoire: Skipping duplicate prompt for', domain);
+        return;
+    }
+
+    let existing = null;
+    try {
+        existing = await getCredentials(domain);
+    } catch (e) {
+        // No stored credentials — will prompt to save
+    }
+
+    let action;
+    if (!existing) {
+        action = 'save_prompt';
+    } else if (existing.username === username && existing.password === password) {
+        console.log('Grimoire: Credentials unchanged, no prompt needed');
+        return;
+    } else {
+        action = 'update_prompt';
+    }
+
+    browser.tabs.sendMessage(tabId, {
+        action: action,
+        domain: domain,
+        username: username,
+        password: password
+    }).catch(err => console.warn('Grimoire: Could not send prompt to tab', tabId, ':', err.message));
+}
+
+// ===== MESSAGE HANDLER =====
+
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    // NEW: Content script reports its startup state
-    if (message.action === "content_script_ready") {
+
+    // ── Content script finished loading ──────────────────────────────────────
+    if (message.action === 'content_script_ready') {
         const tabId = sender.tab.id;
-        const hasPasswordField = message.hasPasswordField;
-        const domain = message.domain;
-        
-        console.log('Grimoire: Content script ready on tab', tabId);
-        console.log('  Domain:', domain);
-        console.log('  Has password field:', hasPasswordField);
-        
+        const { hasPasswordField, domain } = message;
+
+        // Priority 1: process credentials pending from a previous page submit
         const pending = pendingCredentials.get(tabId);
-        
         if (pending) {
-            const timeSinceSubmit = Date.now() - pending.timestamp;
-            
-            // Only process if credentials were submitted recently (within 10 seconds)
-            if (timeSinceSubmit < 10000) {
-                console.log('Found pending credentials from', timeSinceSubmit, 'ms ago');
-                
-                // If no password field, login was successful!
+            const age = Date.now() - pending.timestamp;
+            if (age < 10000) {
                 if (!hasPasswordField) {
-                    console.log('Grimoire: Login successful (no password field) - saving credentials');
-                    
-                    // Check if we should send (avoid duplicates)
-                    if (!shouldSendCredentials(pending.domain, pending.username)) {
-                        console.log('Grimoire: Skipping duplicate credential save');
-                        pendingCredentials.delete(tabId);
-                        sendResponse({ success: true, action: 'duplicate' });
-                        return true;
-                    }
-                    
-                    // Save the credentials via native messaging
-                    sendCredentials(pending.domain, pending.username, pending.password)
-                        .then(result => {
-                            if (result.success) {
-                                console.log('Grimoire: Credentials saved successfully');
-                                markCredentialsAsSent(pending.domain, pending.username);
-                                
-                                // Notify content script of success
-                                browser.tabs.sendMessage(tabId, {
-                                    action: "credentials_saved"
-                                }).catch(() => {});
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Grimoire: Failed to save credentials:', error);
-                        });
-                    
-                    // Clean up
+                    // Navigated to a page with no password field → login succeeded
+                    console.log('Grimoire: Login success (no password field on new page)');
                     pendingCredentials.delete(tabId);
-                    sendResponse({ success: true, action: 'saved' });
+                    evaluateAndPrompt(tabId, pending.domain, pending.username, pending.password)
+                        .catch(e => console.error('Grimoire: evaluateAndPrompt error:', e));
                 } else {
-                    // Still on login page, login failed
-                    console.log('Grimoire: Login failed (still has password field) - discarding credentials');
+                    // Still on a page with a password field → login failed
+                    console.log('Grimoire: Login failed (password field still present)');
                     pendingCredentials.delete(tabId);
-                    
-                    // Notify content script
-                    browser.tabs.sendMessage(tabId, {
-                        action: "credentials_discarded"
-                    }).catch(() => {});
-                    
-                    sendResponse({ success: true, action: 'discarded' });
                 }
             } else {
-                console.log('Pending credentials too old (', timeSinceSubmit, 'ms), ignoring');
-                sendResponse({ success: true, action: 'expired' });
+                pendingCredentials.delete(tabId);
             }
-        } else {
-            console.log('No pending credentials for this tab');
-            sendResponse({ success: true, action: 'none' });
+            sendResponse({ success: true });
+            return true;
         }
-        
+
+        // Priority 2: send back a pending username for multi-step login (step 2)
+        const pendingUser = pendingUsernames.get(tabId);
+        if (pendingUser && pendingUser.domain === domain && hasPasswordField) {
+            console.log('Grimoire: Returning pending username for multi-step login');
+            sendResponse({ action: 'pending_username', username: pendingUser.username });
+            return true;
+        }
+
+        sendResponse({ success: true });
         return true;
     }
-    
-    // Handle credentials submitted
-    if (message.action === "credentials_submitted") {
+
+    // ── Multi-step login: username captured on step 1 ────────────────────────
+    if (message.action === 'username_captured') {
         const tabId = sender.tab.id;
-        
-        console.log('Grimoire: Storing pending credentials for tab', tabId);
-        
+        pendingUsernames.set(tabId, {
+            username: message.username,
+            domain: message.domain,
+            timestamp: Date.now()
+        });
+        sendResponse({ success: true });
+        return true;
+    }
+
+    // ── Form submitted with full credentials ─────────────────────────────────
+    if (message.action === 'credentials_submitted') {
+        const tabId = sender.tab.id;
         pendingCredentials.set(tabId, {
             domain: message.domain,
             username: message.username,
             password: message.password,
             timestamp: Date.now()
         });
-        
+        // Full credentials received — clear any pending username
+        pendingUsernames.delete(tabId);
         sendResponse({ success: true });
         return true;
     }
-    
-    // Get credentials for autofill
-    if (message.action === "get_credentials") {
+
+    // ── SPA login succeeded without page navigation ──────────────────────────
+    if (message.action === 'login_success_spa') {
+        const tabId = sender.tab.id;
+        console.log('Grimoire: SPA login success for', message.domain);
+        evaluateAndPrompt(tabId, message.domain, message.username, message.password)
+            .catch(e => console.error('Grimoire: evaluateAndPrompt error:', e));
+        sendResponse({ success: true });
+        return true;
+    }
+
+    // ── User confirmed save/update from in-page prompt ───────────────────────
+    if (message.action === 'user_confirmed_save') {
+        const { domain, username, password } = message;
+        const tabId = sender.tab.id;
+
+        saveCredentials(domain, username, password)
+            .then(() => {
+                markAsSent(domain, username);
+                browser.tabs.sendMessage(tabId, { action: 'credentials_saved' }).catch(() => {});
+                sendResponse({ success: true });
+            })
+            .catch(err => {
+                console.error('Grimoire: Save failed:', err);
+                browser.tabs.sendMessage(tabId, { action: 'credentials_save_failed' }).catch(() => {});
+                sendResponse({ success: false, error: err.message });
+            });
+        return true;
+    }
+
+    // ── Get credentials for a domain (content script pull / popup query) ─────
+    if (message.action === 'get_credentials') {
         getCredentials(message.domain)
-            .then(credentials => {
-                sendResponse({
-                    success: true,
-                    credentials: credentials
-                });
-            })
-            .catch(error => {
-                sendResponse({
-                    success: false,
-                    error: error.message
-                });
-            });
-        
+            .then(creds => sendResponse({ success: true, credentials: creds }))
+            .catch(err => sendResponse({ success: false, error: err.message }));
         return true;
     }
-    
-    // EXISTING: Direct credential send (keeping for backward compatibility/popup)
-    if (message.action === "send_credentials") {
-        sendCredentials(message.domain, message.username, message.password)
-            .then(result => {
-                sendResponse({
-                    success: true,
-                    message: result.message
-                });
-            })
-            .catch(error => {
-                sendResponse({
-                    success: false,
-                    error: error.message
-                });
-            });
-        
+
+    // ── Popup requests immediate autofill for the active tab ─────────────────
+    if (message.action === 'popup_autofill') {
+        browser.tabs.query({ active: true, currentWindow: true }, tabs => {
+            if (!tabs.length) { sendResponse({ success: false, error: 'No active tab' }); return; }
+            let domain;
+            try { domain = new URL(tabs[0].url).hostname; }
+            catch (e) { sendResponse({ success: false, error: 'Invalid URL' }); return; }
+
+            getCredentials(domain)
+                .then(creds => {
+                    // Direct fill — user already expressed intent by clicking the popup button
+                    browser.tabs.sendMessage(tabs[0].id, {
+                        action: 'autofill',
+                        credentials: creds
+                    }).catch(() => {});
+                    sendResponse({ success: true });
+                })
+                .catch(err => sendResponse({ success: false, error: err.message }));
+        });
         return true;
     }
-    
-    if (message.action === "ping") {
+
+    // ── Ping ─────────────────────────────────────────────────────────────────
+    if (message.action === 'ping') {
         ping()
-            .then(success => {
-                if (success) {
-                    sendResponse({ 
-                        success: true, 
-                        message: "Connected to Grimoire!" 
-                    });
+            .then(ok => {
+                if (ok) {
+                    sendResponse({ success: true, message: 'Connected to Grimoire!' });
                 } else {
-                    sendResponse({ 
-                        success: false, 
-                        error: "Grimoire is not running or locked" 
-                    });
+                    sendResponse({ success: false, error: 'Grimoire is not running or locked' });
                 }
             })
-            .catch(error => {
-                sendResponse({ 
-                    success: false, 
-                    error: error.message 
-                });
-            });
-        
+            .catch(err => sendResponse({ success: false, error: err.message }));
         return true;
     }
 });
 
-// Clean up stale pending credentials after 30 seconds
+// ===== HOUSEKEEPING =====
+
 setInterval(() => {
     const now = Date.now();
-    for (let [tabId, creds] of pendingCredentials.entries()) {
-        if (now - creds.timestamp > 30000) {
-            console.log('Grimoire: Cleaning up stale credentials for tab', tabId);
-            pendingCredentials.delete(tabId);
-        }
+    for (const [id, c] of pendingCredentials) {
+        if (now - c.timestamp > 30000) pendingCredentials.delete(id);
+    }
+    for (const [id, u] of pendingUsernames) {
+        if (now - u.timestamp > 120000) pendingUsernames.delete(id);
     }
 }, 15000);
 
-// Clean up when tabs are closed
-browser.tabs.onRemoved.addListener((tabId) => {
-    if (pendingCredentials.has(tabId)) {
-        console.log('Grimoire: Tab closed, cleaning up pending credentials for tab', tabId);
-        pendingCredentials.delete(tabId);
-    }
-});
-
-// EXISTING: Auto-fill on page load
-browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status === 'complete' && tab.url) {
-        try {
-            const url = new URL(tab.url);
-            const domain = url.hostname;
-            
-            // Skip non-http(s) URLs
-            if (!url.protocol.startsWith('http')) {
-                return;
-            }
-            
-            getCredentials(domain)
-                .then(credentials => {
-                    browser.tabs.sendMessage(tabId, {
-                        action: "autofill",
-                        credentials: credentials
-                    }).catch(() => {
-                        // Content script not ready yet, that's ok
-                    });
-                })
-                .catch(() => {
-                    // No credentials for this domain, that's ok
-                });
-        } catch (e) {
-            // Invalid URL, skip
-        }
-    }
+browser.tabs.onRemoved.addListener(tabId => {
+    pendingCredentials.delete(tabId);
+    pendingUsernames.delete(tabId);
 });
