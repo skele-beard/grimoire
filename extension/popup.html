@@ -1,4 +1,4 @@
-<!DOCTYPE html><!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -11,7 +11,6 @@
 
         body {
             width: 380px;
-            min-height: 240px;
             background: #1a1a1a;
             font-family: 'Courier New', monospace;
             color: #d0d0d0;
@@ -25,10 +24,7 @@
         body::before {
             content: '';
             position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
             background: repeating-linear-gradient(
                 0deg,
                 rgba(0, 0, 0, 0.08),
@@ -44,10 +40,7 @@
         body::after {
             content: '';
             position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
             box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.4);
             pointer-events: none;
             z-index: 9;
@@ -57,13 +50,14 @@
             position: relative;
             z-index: 1;
             padding: 20px;
+            animation: flicker 0.15s infinite;
         }
 
         .header {
             border: 2px solid #3a3a3a;
             background: #1f1f1f;
             padding: 12px;
-            margin-bottom: 16px;
+            margin-bottom: 14px;
             box-shadow: 0 4px 0 #0a0a0a;
         }
 
@@ -86,7 +80,7 @@
         .window {
             border: 2px solid #3a3a3a;
             background: #1f1f1f;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             box-shadow: 0 4px 0 #0a0a0a;
         }
 
@@ -100,9 +94,10 @@
         }
 
         .window-content {
-            padding: 12px;
+            padding: 10px 12px;
         }
 
+        /* Status row */
         .status {
             display: flex;
             align-items: center;
@@ -128,6 +123,37 @@
             font-size: 11px;
         }
 
+        /* Current page info rows */
+        .info-row {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            padding: 3px 0;
+        }
+
+        .info-row + .info-row {
+            border-top: 1px solid #242424;
+        }
+
+        .info-label {
+            font-size: 9px;
+            color: #555;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            min-width: 52px;
+            flex-shrink: 0;
+        }
+
+        .info-value {
+            font-size: 11px;
+            color: #909090;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 240px;
+        }
+
+        /* Buttons */
         button {
             width: 100%;
             padding: 10px;
@@ -142,24 +168,35 @@
             transition: all 0.1s;
             letter-spacing: 2px;
             text-transform: uppercase;
+            margin-bottom: 8px;
         }
 
-        button:hover {
+        button:hover:not(:disabled) {
             background: #353535;
             color: #b0b0b0;
             border-color: #4a4a4a;
         }
 
-        button:active {
-            border-bottom: 2px solid #000000;
-            border-right: 2px solid #000000;
+        button:active:not(:disabled) {
+            border-bottom: 2px solid #000;
+            border-right: 2px solid #000;
             transform: translate(1px, 1px);
+        }
+
+        button:disabled {
+            color: #444;
+            border-color: #282828;
+            cursor: default;
+        }
+
+        button:last-child {
+            margin-bottom: 0;
         }
 
         .footer {
             border-top: 1px solid #3a3a3a;
-            padding: 8px 0 0 0;
-            margin-top: 12px;
+            padding: 8px 0 0;
+            margin-top: 10px;
         }
 
         .info {
@@ -169,14 +206,9 @@
             letter-spacing: 1px;
         }
 
-        /* Subtle flicker effect */
         @keyframes flicker {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.98; }
-        }
-
-        .container {
-            animation: flicker 0.15s infinite;
+            50%       { opacity: 0.98; }
         }
     </style>
 </head>
@@ -186,7 +218,7 @@
             <h1>GRIMOIRE</h1>
             <div class="subtitle">PASSWORD VAULT</div>
         </div>
-        
+
         <div class="window">
             <div class="window-title">STATUS</div>
             <div class="window-content">
@@ -196,10 +228,27 @@
                 </div>
             </div>
         </div>
-        
-        <button id="testButton">
-            <span>[ TEST CONNECTION ]</span>
-        </button>
+
+        <div class="window">
+            <div class="window-title">CURRENT PAGE</div>
+            <div class="window-content">
+                <div class="info-row">
+                    <span class="info-label">DOMAIN</span>
+                    <span id="domainText" class="info-value">—</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">STORED</span>
+                    <span id="credentialStatus" class="info-value">—</span>
+                </div>
+            </div>
+        </div>
+
+        <button id="fillButton" disabled>[ AUTOFILL ]</button>
+        <button id="testButton">[ TEST CONNECTION ]</button>
+
+        <div class="footer">
+            <div class="info">GRIMOIRE PASSWORD MANAGER</div>
+        </div>
     </div>
 
     <script src="popup.js"></script>
